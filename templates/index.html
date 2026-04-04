@@ -286,8 +286,8 @@
     </div>
   </main>
 
+  <script src="https://sdk.twilio.com/js/client/v1.13/twilio.min.js"></script>
   <script>
-    import { Device } from '@twilio/voice-sdk';
     let device = null;
     let activeCall = null;
     let activeLeadId = null;
@@ -360,9 +360,7 @@
       setStatus(leadId, 'Calling…', 'status-calling');
 
       const conn = device.connect({
-        params: {
           To: phone
-        }
       });
 
       conn.on('ringing', () => setStatus(leadId, 'Ringing…', 'status-calling'));
