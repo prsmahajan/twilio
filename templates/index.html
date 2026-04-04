@@ -1,177 +1,375 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Cold Call Dialer</title>
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: system-ui, sans-serif; background: #f4f6f9; color: #222; }
-    header { background: #1a1a2e; color: #fff; padding: 16px 32px; font-size: 1.2rem; font-weight: 600; }
-    main { max-width: 960px; margin: 32px auto; padding: 0 16px; }
-    h2 { font-size: 1rem; font-weight: 600; margin-bottom: 12px; color: #444; text-transform: uppercase; letter-spacing: .05em; }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
 
-    table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,.1); }
-    thead { background: #1a1a2e; color: #fff; }
-    th, td { padding: 12px 16px; text-align: left; font-size: .9rem; }
-    tbody tr { border-bottom: 1px solid #eee; }
-    tbody tr:last-child { border-bottom: none; }
-    tbody tr:hover { background: #f9f9fb; }
+    body {
+      font-family: system-ui, sans-serif;
+      background: #f4f6f9;
+      color: #222;
+    }
+
+    header {
+      background: #1a1a2e;
+      color: #fff;
+      padding: 16px 32px;
+      font-size: 1.2rem;
+      font-weight: 600;
+    }
+
+    main {
+      max-width: 960px;
+      margin: 32px auto;
+      padding: 0 16px;
+    }
+
+    h2 {
+      font-size: 1rem;
+      font-weight: 600;
+      margin-bottom: 12px;
+      color: #444;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #fff;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, .1);
+    }
+
+    thead {
+      background: #1a1a2e;
+      color: #fff;
+    }
+
+    th,
+    td {
+      padding: 12px 16px;
+      text-align: left;
+      font-size: .9rem;
+    }
+
+    tbody tr {
+      border-bottom: 1px solid #eee;
+    }
+
+    tbody tr:last-child {
+      border-bottom: none;
+    }
+
+    tbody tr:hover {
+      background: #f9f9fb;
+    }
 
     .btn-call {
-      background: #2ecc71; color: #fff; border: none; padding: 6px 16px;
-      border-radius: 4px; cursor: pointer; font-size: .85rem; font-weight: 600;
+      background: #2ecc71;
+      color: #fff;
+      border: none;
+      padding: 6px 16px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: .85rem;
+      font-weight: 600;
       min-width: 72px;
     }
-    .btn-call:hover  { background: #27ae60; }
-    .btn-call.hangup { background: #e74c3c; }
-    .btn-call.hangup:hover { background: #c0392b; }
-    .btn-call:disabled { background: #aaa; cursor: not-allowed; }
+
+    .btn-call:hover {
+      background: #27ae60;
+    }
+
+    .btn-call.hangup {
+      background: #e74c3c;
+    }
+
+    .btn-call.hangup:hover {
+      background: #c0392b;
+    }
+
+    .btn-call:disabled {
+      background: #aaa;
+      cursor: not-allowed;
+    }
 
     .status-badge {
-      display: inline-block; font-size: .75rem; padding: 2px 8px;
-      border-radius: 12px; font-weight: 600; margin-left: 8px;
+      display: inline-block;
+      font-size: .75rem;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-weight: 600;
+      margin-left: 8px;
     }
-    .status-calling    { background: #fff3cd; color: #856404; }
-    .status-connected  { background: #d1f5e0; color: #155724; }
-    .status-ended      { background: #e2e3e5; color: #383d41; }
-    .status-error      { background: #f8d7da; color: #842029; }
+
+    .status-calling {
+      background: #fff3cd;
+      color: #856404;
+    }
+
+    .status-connected {
+      background: #d1f5e0;
+      color: #155724;
+    }
+
+    .status-ended {
+      background: #e2e3e5;
+      color: #383d41;
+    }
+
+    .status-error {
+      background: #f8d7da;
+      color: #842029;
+    }
 
     #sdk-status {
-      font-size: .8rem; padding: 6px 14px; border-radius: 6px;
-      display: inline-block; margin-bottom: 16px; background: #e2e3e5; color: #383d41;
+      font-size: .8rem;
+      padding: 6px 14px;
+      border-radius: 6px;
+      display: inline-block;
+      margin-bottom: 16px;
+      background: #e2e3e5;
+      color: #383d41;
     }
-    #sdk-status.ready { background: #d1f5e0; color: #155724; }
-    #sdk-status.error { background: #f8d7da; color: #842029; }
 
-    .notes-section { margin-top: 40px; }
+    #sdk-status.ready {
+      background: #d1f5e0;
+      color: #155724;
+    }
+
+    #sdk-status.error {
+      background: #f8d7da;
+      color: #842029;
+    }
+
+    .notes-section {
+      margin-top: 40px;
+    }
+
     .lead-card {
-      background: #fff; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,.1);
-      margin-bottom: 20px; padding: 16px 20px;
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, .1);
+      margin-bottom: 20px;
+      padding: 16px 20px;
     }
-    .lead-card h3 { font-size: .95rem; margin-bottom: 10px; color: #1a1a2e; }
-    .note-entry { font-size: .85rem; color: #555; padding: 4px 0; border-bottom: 1px solid #f0f0f0; }
-    .note-entry:last-of-type { border-bottom: none; }
-    .note-time { color: #999; font-size: .75rem; margin-left: 8px; }
-    .note-form { display: flex; gap: 8px; margin-top: 12px; }
-    .note-form input[type=text] {
-      flex: 1; padding: 7px 12px; border: 1px solid #ddd; border-radius: 4px; font-size: .85rem;
-    }
-    .note-form button {
-      background: #1a1a2e; color: #fff; border: none; padding: 7px 16px;
-      border-radius: 4px; cursor: pointer; font-size: .85rem;
-    }
-    .note-form button:hover { background: #2d2d4e; }
 
-    .empty { color: #999; font-size: .85rem; font-style: italic; }
+    .lead-card h3 {
+      font-size: .95rem;
+      margin-bottom: 10px;
+      color: #1a1a2e;
+    }
+
+    .note-entry {
+      font-size: .85rem;
+      color: #555;
+      padding: 4px 0;
+      border-bottom: 1px solid #f0f0f0;
+    }
+
+    .note-entry:last-of-type {
+      border-bottom: none;
+    }
+
+    .note-time {
+      color: #999;
+      font-size: .75rem;
+      margin-left: 8px;
+    }
+
+    .note-form {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .note-form input[type=text] {
+      flex: 1;
+      padding: 7px 12px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: .85rem;
+    }
+
+    .note-form button {
+      background: #1a1a2e;
+      color: #fff;
+      border: none;
+      padding: 7px 16px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: .85rem;
+    }
+
+    .note-form button:hover {
+      background: #2d2d4e;
+    }
+
+    .empty {
+      color: #999;
+      font-size: .85rem;
+      font-style: italic;
+    }
   </style>
 </head>
+
 <body>
 
-<header>Cold Call Dialer</header>
+  <header>Cold Call Dialer</header>
 
-<main>
-  <div id="sdk-status">Initializing mic &amp; SDK…</div>
+  <main>
+    <div id="sdk-status">Initializing mic &amp; SDK…</div>
 
-  <h2>Leads</h2>
-  {% if leads %}
-  <table>
-    <thead>
-      <tr>
-        <th>#</th>
-        <th>Name</th>
-        <th>Phone</th>
-        <th>Action</th>
-      </tr>
-    </thead>
-    <tbody>
+    <h2>Leads</h2>
+    {% if leads %}
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Name</th>
+          <th>Phone</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for lead in leads %}
+        <tr id="lead-{{ lead.id }}">
+          <td>{{ lead.id }}</td>
+          <td>{{ lead.name }}</td>
+          <td>{{ lead.phone }}</td>
+          <td>
+            <button class="btn-call" id="btn-{{ lead.id }}" onclick="handleCallButton('{{ lead.id }}', '{{ lead.phone }}', this)" disabled>Call</button>
+            <span id="status-{{ lead.id }}" class="status-badge"></span>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="empty">No leads found. Add rows to leads.csv.</p>
+    {% endif %}
+
+    <div class="notes-section">
+      <h2>Notes</h2>
       {% for lead in leads %}
-      <tr id="lead-{{ lead.id }}">
-        <td>{{ lead.id }}</td>
-        <td>{{ lead.name }}</td>
-        <td>{{ lead.phone }}</td>
-        <td>
-          <button
-            class="btn-call"
-            id="btn-{{ lead.id }}"
-            onclick="handleCallButton('{{ lead.id }}', '{{ lead.phone }}', this)"
-            disabled
-          >Call</button>
-          <span id="status-{{ lead.id }}" class="status-badge"></span>
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  {% else %}
-  <p class="empty">No leads found. Add rows to leads.csv.</p>
-  {% endif %}
+      <div class="lead-card" id="notes-{{ lead.id }}">
+        <h3>{{ lead.name }} &mdash; {{ lead.phone }}</h3>
 
-  <div class="notes-section">
-    <h2>Notes</h2>
-    {% for lead in leads %}
-    <div class="lead-card" id="notes-{{ lead.id }}">
-      <h3>{{ lead.name }} &mdash; {{ lead.phone }}</h3>
-
-      {% if notes.get(lead.id) %}
+        {% if notes.get(lead.id) %}
         {% for n in notes[lead.id] %}
         <div class="note-entry">
           {{ n.note }}<span class="note-time">{{ n.timestamp }}</span>
         </div>
         {% endfor %}
-      {% else %}
+        {% else %}
         <div class="empty">No notes yet.</div>
-      {% endif %}
+        {% endif %}
 
-      <form class="note-form" method="POST" action="/save_note">
-        <input type="hidden" name="lead_id" value="{{ lead.id }}"/>
-        <input type="hidden" name="lead_name" value="{{ lead.name }}"/>
-        <input type="text" name="note" placeholder="Add a note..." required/>
-        <button type="submit">Save</button>
-      </form>
+        <form class="note-form" method="POST" action="/save_note">
+          <input type="hidden" name="lead_id" value="{{ lead.id }}" />
+          <input type="hidden" name="lead_name" value="{{ lead.name }}" />
+          <input type="text" name="note" placeholder="Add a note..." required />
+          <button type="submit">Save</button>
+        </form>
+      </div>
+      {% endfor %}
     </div>
-    {% endfor %}
-  </div>
-</main>
+  </main>
 
-  <script src="https://media.twiliocdn.com/sdk/js/voice/latest/twilio.min.js"></script>
-<script>
-  let device = null;
-  let activeCall = null;
-  let activeLeadId = null;
+  <script src="https://media.twiliocdn.com/sdk/js/voice/2.3/twilio.min.js"></script>
+  <script>
+    let device = null;
+    let activeCall = null;
+    let activeLeadId = null;
 
-  // ── SDK bootstrap ────────────────────────────────────────────────────────────
-  async function initDevice() {
-    const sdkEl = document.getElementById('sdk-status');
-    try {
-      const res = await fetch('/token');
-      if (!res.ok) throw new Error('Token fetch failed');
-      const { token } = await res.json();
+    // ── SDK bootstrap ────────────────────────────────────────────────────────────
+    async function initDevice() {
+      const sdkEl = document.getElementById('sdk-status');
+      try {
+        const res = await fetch('/token');
+        if (!res.ok) throw new Error('Token fetch failed');
+        const { token } = await res.json();
 
-      device = new Twilio.Device(token, { codecPreferences: ['opus', 'pcmu'] });
+        device = new Twilio.Device(token);
 
-      device.on('ready', () => {
-        sdkEl.textContent = 'Ready — mic connected';
-        sdkEl.className = 'ready';
-        document.querySelectorAll('.btn-call').forEach(b => b.disabled = false);
-      });
+        device.on('ready', () => {
+          sdkEl.textContent = 'Ready — mic connected';
+          sdkEl.className = 'ready';
+          document.querySelectorAll('.btn-call').forEach(b => b.disabled = false);
+        });
 
-      device.on('error', (err) => {
-        sdkEl.textContent = 'SDK error: ' + err.message;
+        device.on('error', (err) => {
+          sdkEl.textContent = 'SDK error: ' + err.message;
+          sdkEl.className = 'error';
+        });
+
+        device.on('connect', (conn) => {
+          activeCall = conn;
+          if (activeLeadId) setStatus(activeLeadId, 'Connected', 'status-connected');
+        });
+
+        device.on('disconnect', () => {
+          if (activeLeadId) {
+            setStatus(activeLeadId, 'Ended', 'status-ended');
+            resetButton(activeLeadId);
+            setTimeout(() => setStatus(activeLeadId, '', ''), 4000);
+          }
+          activeCall = null;
+          activeLeadId = null;
+          document.querySelectorAll('.btn-call').forEach(b => {
+            b.disabled = false;
+            b.textContent = 'Call';
+            b.classList.remove('hangup');
+          });
+        });
+
+        device.on('cancel', () => device.emit('disconnect'));
+
+      } catch (e) {
+        sdkEl.textContent = 'Failed to init: ' + e.message;
         sdkEl.className = 'error';
-      });
+      }
+    }
 
-      device.on('connect', (conn) => {
-        activeCall = conn;
-        if (activeLeadId) setStatus(activeLeadId, 'Connected', 'status-connected');
-      });
+    // ── Call / hangup toggle ─────────────────────────────────────────────────────
+    function handleCallButton(leadId, phone, btn) {
+      if (activeCall) {
+        activeCall.disconnect();
+        return;
+      }
+      if (!device) return;
 
-      device.on('disconnect', () => {
-        if (activeLeadId) {
-          setStatus(activeLeadId, 'Ended', 'status-ended');
-          resetButton(activeLeadId);
-          setTimeout(() => setStatus(activeLeadId, '', ''), 4000);
+      activeLeadId = leadId;
+
+      // Disable all other call buttons while a call is active
+      document.querySelectorAll('.btn-call').forEach(b => { b.disabled = true; });
+      btn.disabled = false;
+      btn.textContent = 'Hang up';
+      btn.classList.add('hangup');
+
+      setStatus(leadId, 'Calling…', 'status-calling');
+
+      const conn = device.connect({
+        params: {
+          To: phone
         }
+      });
+
+      conn.on('ringing', () => setStatus(leadId, 'Ringing…', 'status-calling'));
+      conn.on('accept', () => setStatus(leadId, 'Connected', 'status-connected'));
+      conn.on('error', (err) => {
+        setStatus(leadId, err.message, 'status-error');
+        resetButton(leadId);
         activeCall = null;
         activeLeadId = null;
         document.querySelectorAll('.btn-call').forEach(b => {
@@ -180,67 +378,24 @@
           b.classList.remove('hangup');
         });
       });
-
-      device.on('cancel', () => device.emit('disconnect'));
-
-    } catch (e) {
-      sdkEl.textContent = 'Failed to init: ' + e.message;
-      sdkEl.className = 'error';
     }
-  }
 
-  // ── Call / hangup toggle ─────────────────────────────────────────────────────
-  function handleCallButton(leadId, phone, btn) {
-    if (activeCall) {
-      activeCall.disconnect();
-      return;
+    // ── Helpers ──────────────────────────────────────────────────────────────────
+    function setStatus(leadId, text, cls) {
+      const el = document.getElementById('status-' + leadId);
+      el.textContent = text;
+      el.className = 'status-badge' + (cls ? ' ' + cls : '');
     }
-    if (!device) return;
 
-    activeLeadId = leadId;
+    function resetButton(leadId) {
+      const btn = document.getElementById('btn-' + leadId);
+      if (btn) { btn.textContent = 'Call'; btn.classList.remove('hangup'); }
+    }
 
-    // Disable all other call buttons while a call is active
-    document.querySelectorAll('.btn-call').forEach(b => { b.disabled = true; });
-    btn.disabled = false;
-    btn.textContent = 'Hang up';
-    btn.classList.add('hangup');
-
-    setStatus(leadId, 'Calling…', 'status-calling');
-
-    const conn = device.connect({  params: {
-    To: phone
-  }});
-
-    conn.on('ringing', () => setStatus(leadId, 'Ringing…', 'status-calling'));
-    conn.on('accept',  () => setStatus(leadId, 'Connected', 'status-connected'));
-    conn.on('error',   (err) => {
-      setStatus(leadId, err.message, 'status-error');
-      resetButton(leadId);
-      activeCall = null;
-      activeLeadId = null;
-      document.querySelectorAll('.btn-call').forEach(b => {
-        b.disabled = false;
-        b.textContent = 'Call';
-        b.classList.remove('hangup');
-      });
-    });
-  }
-
-  // ── Helpers ──────────────────────────────────────────────────────────────────
-  function setStatus(leadId, text, cls) {
-    const el = document.getElementById('status-' + leadId);
-    el.textContent = text;
-    el.className = 'status-badge' + (cls ? ' ' + cls : '');
-  }
-
-  function resetButton(leadId) {
-    const btn = document.getElementById('btn-' + leadId);
-    if (btn) { btn.textContent = 'Call'; btn.classList.remove('hangup'); }
-  }
-
-  // ── Boot ─────────────────────────────────────────────────────────────────────
-  window.addEventListener('DOMContentLoaded', initDevice);
-</script>
+    // ── Boot ─────────────────────────────────────────────────────────────────────
+    window.addEventListener('DOMContentLoaded', initDevice);
+  </script>
 
 </body>
+
 </html>
