@@ -207,7 +207,9 @@
 
     setStatus(leadId, 'Calling…', 'status-calling');
 
-    const conn = device.connect({ To: phone });
+    const conn = device.connect({  params: {
+    To: phone
+  }});
 
     conn.on('ringing', () => setStatus(leadId, 'Ringing…', 'status-calling'));
     conn.on('accept',  () => setStatus(leadId, 'Connected', 'status-connected'));
