@@ -1,0 +1,1056 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dialer</title>
+  <style>
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: system-ui, sans-serif;
+      background: #dde1e7;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* ── Shell ── */
+    .shell {
+      width: 360px;
+      height: 640px;
+      background: #fff;
+      /* border-radius: 20px; */
+      box-shadow: 0 8px 40px rgba(0, 0, 0, .2);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* ── Top bar ── */
+    .top-bar {
+      background: #1a2a4a;
+      color: #fff;
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: .82rem;
+      flex-shrink: 0;
+    }
+
+    .top-bar strong {
+      font-weight: 600;
+    }
+
+    /* ── Status pill ── */
+    #status-bar {
+      text-align: center;
+      font-size: .72rem;
+      font-weight: 600;
+      padding: 3px 10px;
+      /* margin: 6px 14px 4px; */
+      margin: 6px auto 14px auto;
+      width: 100px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 10px;
+      background: #e8e8e8;
+      color: #555;
+      flex-shrink: 0;
+      transition: background .2s, color .2s;
+    }
+
+    #status-bar.ready {
+      background: #d1f5e0;
+      color: #155724;
+    }
+
+    #status-bar.calling {
+      background: #fff3cd;
+      color: #856404;
+    }
+
+    #status-bar.connected {
+      background: #cce5ff;
+      color: #004085;
+    }
+
+    #status-bar.error {
+      background: #f8d7da;
+      color: #842029;
+    }
+
+    /* ── Views ── */
+    .views {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .view {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      background: #fff;
+      transform: translateX(100%);
+      transition: transform .22s ease;
+    }
+
+    .view.active {
+      transform: translateX(0);
+    }
+
+    .view.slide-left {
+      transform: translateX(-30%);
+    }
+
+    /* ── KEYPAD ── */
+    #view-keypad {
+      padding: 6px 16px 10px;
+      align-items: center;
+    }
+
+    .display-row {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      min-height: 48px;
+      margin-bottom: 4px;
+    }
+
+    #display {
+      flex: 1;
+      font-size: 1.55rem;
+      letter-spacing: .1em;
+      text-align: center;
+      color: #1a1a2e;
+      padding: 4px;
+      min-height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #btn-backspace {
+      background: none;
+      border: none;
+      font-size: 1.15rem;
+      cursor: pointer;
+      color: #aaa;
+      padding: 6px;
+      border-radius: 6px;
+    }
+
+    #btn-backspace:hover {
+      color: #555;
+      background: #f0f0f0;
+    }
+
+    .keypad-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      width: 100%;
+      margin-bottom: 12px;
+    }
+
+    .key {
+      height: 62px;
+      border-radius: 50%;
+      border: none;
+      background: #f0f2f5;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 1px;
+      font-size: 1.15rem;
+      font-weight: 500;
+      color: #1a1a2e;
+      transition: background .1s;
+      width: 62px;
+      justify-self: center;
+    }
+
+    .key:hover {
+      background: #e2e6ec;
+    }
+
+    .key:active {
+      background: #d5dae3;
+    }
+
+    .key .sub {
+      font-size: .5rem;
+      letter-spacing: .13em;
+      color: #999;
+      font-weight: 400;
+      line-height: 1;
+    }
+
+    .action-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 36px;
+      width: 100%;
+      margin-top: 4px;
+    }
+
+    .action-side {
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.1rem;
+      transition: background .15s;
+    }
+
+    #btn-autodialer {
+      background: #e8f2ff;
+      color: #1a6fcc;
+    }
+
+    #btn-autodialer:hover {
+      background: #d4e8ff;
+    }
+
+    #btn-call {
+      width: 66px;
+      height: 66px;
+      border-radius: 50%;
+      border: none;
+      background: #1a7fe8;
+      color: #fff;
+      font-size: 1.4rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 14px rgba(26, 127, 232, .38);
+      transition: background .15s, box-shadow .15s;
+    }
+
+    #btn-call:hover {
+      background: #1365c0;
+    }
+
+    #btn-call.hangup {
+      background: #e81a1a;
+      box-shadow: 0 4px 14px rgba(232, 26, 26, .38);
+    }
+
+    #btn-call.hangup:hover {
+      background: #c01313;
+    }
+
+    #btn-call:disabled {
+      background: #bbb;
+      box-shadow: none;
+      cursor: not-allowed;
+    }
+
+    .action-placeholder {
+      width: 50px;
+    }
+
+    /* ── AUTODIALER ── */
+    #view-autodialer {
+      padding: 0;
+    }
+
+    .view-header {
+      display: flex;
+      align-items: center;
+      padding: 11px 16px;
+      border-bottom: 1px solid #eee;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .view-header h2 {
+      font-size: .95rem;
+      font-weight: 600;
+      color: #1a1a2e;
+    }
+
+    .btn-back {
+      background: none;
+      border: none;
+      font-size: 1.3rem;
+      cursor: pointer;
+      color: #1a7fe8;
+      padding: 0 4px;
+      line-height: 1;
+    }
+
+    .view-body {
+      flex: 1;
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      overflow-y: auto;
+    }
+
+    .hint {
+      font-size: .77rem;
+      color: #777;
+      line-height: 1.5;
+    }
+
+    #auto-numbers {
+      flex: 1;
+      min-height: 160px;
+      border: 1.5px solid #ddd;
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: .88rem;
+      resize: none;
+      outline: none;
+      font-family: monospace;
+      color: #333;
+      transition: border-color .2s;
+    }
+
+    #auto-numbers:focus {
+      border-color: #1a7fe8;
+    }
+
+    #auto-numbers::placeholder {
+      color: #bbb;
+      font-family: system-ui;
+    }
+
+    #auto-progress {
+      font-size: .8rem;
+      color: #777;
+      text-align: center;
+      min-height: 18px;
+      font-weight: 500;
+    }
+
+    #auto-progress.live {
+      color: #1a7fe8;
+    }
+
+    .auto-btn-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .auto-btn-row.single {
+      grid-template-columns: 1fr;
+    }
+
+    .btn-primary {
+      padding: 11px;
+      background: #1a7fe8;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: .9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .15s;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background: #1365c0;
+    }
+
+    .btn-primary:disabled {
+      background: #bbb;
+      cursor: not-allowed;
+    }
+
+    .btn-primary.red {
+      background: #e74c3c;
+    }
+
+    .btn-primary.red:hover:not(:disabled) {
+      background: #c0392b;
+    }
+
+    .btn-primary.amber {
+      background: #e67e22;
+    }
+
+    .btn-primary.amber:hover:not(:disabled) {
+      background: #ca6f1e;
+    }
+
+    .btn-ghost {
+      padding: 10px;
+      background: transparent;
+      color: #666;
+      border: 1.5px solid #ddd;
+      border-radius: 8px;
+      font-size: .88rem;
+      cursor: pointer;
+    }
+
+    .btn-ghost:hover {
+      background: #f5f5f5;
+    }
+
+    /* ── AUTODIALER list UI ── */
+    #auto-input {
+      flex: 1;
+      min-height: 180px;
+      border: 1.5px solid #ddd;
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: .88rem;
+      font-family: monospace;
+      resize: none;
+      outline: none;
+      color: #333;
+      line-height: 1.7;
+      transition: border-color .2s;
+    }
+
+    #auto-input:focus {
+      border-color: #1a7fe8;
+    }
+
+    #auto-input::placeholder {
+      color: #bbb;
+      font-family: system-ui;
+      font-size: .8rem;
+    }
+
+    .digit-count {
+      font-size: .75rem;
+      color: #aaa;
+      text-align: right;
+    }
+
+    .digit-count.has-numbers {
+      color: #1a7fe8;
+      font-weight: 600;
+    }
+
+    .auto-list {
+      overflow-y: auto;
+      border: 1.5px solid #eee;
+      border-radius: 8px;
+      min-height: 120px;
+      max-height: 220px;
+    }
+
+    .auto-num-item {
+      display: flex;
+      align-items: center;
+      padding: 9px 12px;
+      border-bottom: 1px solid #f2f2f2;
+      gap: 8px;
+    }
+
+    .auto-num-item:last-child {
+      border-bottom: none;
+    }
+
+    .auto-num-item.current {
+      background: #e8f2ff;
+    }
+
+    .auto-num-item.done {
+      opacity: .4;
+    }
+
+    .auto-num-text {
+      flex: 1;
+      font-size: .86rem;
+      color: #1a1a2e;
+      font-family: monospace;
+    }
+
+    .btn-remove {
+      background: none;
+      border: none;
+      color: #ccc;
+      font-size: 1rem;
+      cursor: pointer;
+      padding: 2px 4px;
+      border-radius: 4px;
+      line-height: 1;
+    }
+
+    .btn-remove:hover {
+      color: #e74c3c;
+      background: #fff0f0;
+    }
+
+    /* ── MESSAGES ── */
+    #view-messages {
+      padding: 0;
+    }
+
+    .msg-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 13px 16px;
+      border-bottom: 1px solid #eee;
+      flex-shrink: 0;
+    }
+
+    .msg-header h2 {
+      font-size: .95rem;
+      font-weight: 600;
+      color: #1a1a2e;
+    }
+
+    .btn-icon {
+      background: none;
+      border: 1.5px solid #1a7fe8;
+      border-radius: 6px;
+      color: #1a7fe8;
+      font-size: 1rem;
+      width: 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+
+    #threads-list {
+      flex: 1;
+      overflow-y: auto;
+    }
+
+    .thread-item {
+      display: flex;
+      align-items: center;
+      padding: 11px 16px;
+      border-bottom: 1px solid #f2f2f2;
+      cursor: pointer;
+      gap: 11px;
+    }
+
+    .thread-item:hover {
+      background: #f9f9fb;
+    }
+
+    .avatar {
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      background: #1a7fe8;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: .8rem;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    .thread-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .thread-num {
+      font-size: .86rem;
+      font-weight: 600;
+      color: #1a1a2e;
+    }
+
+    .thread-prev {
+      font-size: .76rem;
+      color: #999;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .thread-date {
+      font-size: .7rem;
+      color: #ccc;
+      flex-shrink: 0;
+    }
+
+    /* ── CONVERSATION ── */
+    #view-conversation {
+      padding: 0;
+      background: #f4f6f9;
+    }
+
+    .conv-header {
+      display: flex;
+      align-items: center;
+      padding: 11px 16px;
+      border-bottom: 1px solid #eee;
+      gap: 10px;
+      background: #fff;
+      flex-shrink: 0;
+    }
+
+    .conv-number {
+      font-size: .88rem;
+      font-weight: 600;
+      color: #1a1a2e;
+      flex: 1;
+    }
+
+    .btn-call-contact {
+      background: none;
+      border: none;
+      font-size: 1rem;
+      cursor: pointer;
+      color: #1a7fe8;
+      padding: 4px;
+    }
+
+    #conv-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+    }
+
+    .bubble {
+      max-width: 74%;
+      padding: 8px 12px;
+      border-radius: 14px;
+      font-size: .82rem;
+      line-height: 1.45;
+      word-break: break-word;
+    }
+
+    .bubble.out {
+      background: #1a7fe8;
+      color: #fff;
+      align-self: flex-end;
+      border-bottom-right-radius: 3px;
+    }
+
+    .bubble.in {
+      background: #fff;
+      color: #222;
+      align-self: flex-start;
+      border: 1px solid #e8e8e8;
+      border-bottom-left-radius: 3px;
+    }
+
+    .b-time {
+      font-size: .63rem;
+      opacity: .6;
+      margin-top: 3px;
+    }
+
+    .compose-row {
+      display: flex;
+      align-items: flex-end;
+      gap: 8px;
+      padding: 9px 12px;
+      border-top: 1px solid #eee;
+      background: #fff;
+      flex-shrink: 0;
+    }
+
+    #sms-body {
+      flex: 1;
+      border: 1.5px solid #ddd;
+      border-radius: 18px;
+      padding: 7px 12px;
+      font-size: .83rem;
+      resize: none;
+      outline: none;
+      max-height: 72px;
+      font-family: system-ui;
+      transition: border-color .2s;
+    }
+
+    #sms-body:focus {
+      border-color: #1a7fe8;
+    }
+
+    #btn-send-sms {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      border: none;
+      background: #1a7fe8;
+      color: #fff;
+      font-size: .85rem;
+      cursor: pointer;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #btn-send-sms:hover {
+      background: #1365c0;
+    }
+
+    /* ── COMPOSE NEW ── */
+    #view-compose {
+      padding: 0;
+    }
+
+    .to-row {
+      display: flex;
+      align-items: center;
+      padding: 10px 16px;
+      border-bottom: 1px solid #eee;
+      gap: 8px;
+    }
+
+    .to-row label {
+      font-size: .82rem;
+      color: #aaa;
+      flex-shrink: 0;
+    }
+
+    #sms-to {
+      flex: 1;
+      border: none;
+      outline: none;
+      font-size: .9rem;
+      color: #1a1a2e;
+      padding: 2px 0;
+    }
+
+    .new-body-area {
+      flex: 1;
+      padding: 12px 16px;
+    }
+
+    #sms-text {
+      width: 100%;
+      height: 110px;
+      border: 1.5px solid #ddd;
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: .86rem;
+      resize: none;
+      outline: none;
+      font-family: system-ui;
+    }
+
+    #sms-text:focus {
+      border-color: #1a7fe8;
+    }
+
+    .new-actions {
+      padding: 0 16px 14px;
+    }
+
+    /* ── RECENT ── */
+    #view-recent {
+      padding: 0;
+    }
+
+    .section-header {
+      padding: 13px 16px;
+      border-bottom: 1px solid #eee;
+      font-size: .95rem;
+      font-weight: 600;
+      color: #1a1a2e;
+      flex-shrink: 0;
+    }
+
+    #recent-list {
+      flex: 1;
+      overflow-y: auto;
+    }
+
+    .recent-item {
+      display: flex;
+      align-items: center;
+      padding: 10px 16px;
+      border-bottom: 1px solid #f2f2f2;
+      cursor: pointer;
+      gap: 11px;
+    }
+
+    .recent-item:hover {
+      background: #f9f9fb;
+    }
+
+    .r-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: .85rem;
+      flex-shrink: 0;
+    }
+
+    .r-icon.out {
+      background: #e8f2ff;
+      color: #1a6fcc;
+    }
+
+    .r-icon.in {
+      background: #e8fff2;
+      color: #1a7f50;
+    }
+
+    .r-icon.miss {
+      background: #fff0f0;
+      color: #cc1a1a;
+    }
+
+    .r-info {
+      flex: 1;
+    }
+
+    .r-num {
+      font-size: .86rem;
+      font-weight: 600;
+      color: #1a1a2e;
+    }
+
+    .r-meta {
+      font-size: .73rem;
+      color: #aaa;
+    }
+
+    .r-dur {
+      font-size: .73rem;
+      color: #bbb;
+      flex-shrink: 0;
+    }
+
+    /* ── SETTINGS ── */
+    #view-settings {
+      padding: 0;
+    }
+
+    .settings-body {
+      padding: 20px 16px;
+      font-size: .85rem;
+      color: #666;
+      line-height: 1.7;
+    }
+
+    /* ── TAB BAR ── */
+    .tab-bar {
+      display: flex;
+      border-top: 1px solid #eee;
+      flex-shrink: 0;
+      background: #fff;
+    }
+
+    .tab {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      padding: 8px 2px 6px;
+      border: none;
+      background: none;
+      cursor: pointer;
+      color: #bbb;
+      font-size: .6rem;
+      transition: color .15s;
+    }
+
+    .tab .ti {
+      font-size: 1.05rem;
+    }
+
+    .tab.active {
+      color: #1a7fe8;
+    }
+
+    /* ── shared ── */
+    .empty {
+      text-align: center;
+      color: #bbb;
+      font-size: .82rem;
+      padding: 36px 16px;
+    }
+
+    .loading {
+      text-align: center;
+      color: #bbb;
+      font-size: .8rem;
+      padding: 24px;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="shell">
+
+    <!-- Status pill -->
+    <div id="status-bar">Idle</div>
+
+    <!-- Views -->
+    <div class="views">
+
+      <!-- ── KEYPAD ── -->
+      <div id="view-keypad" class="view active">
+        <div class="display-row">
+          <div id="display"></div>
+          <button id="btn-backspace" title="Backspace">⌫</button>
+        </div>
+        <div class="keypad-grid">
+          <button class="key" data-digit="1">1<span class="sub"></span></button>
+          <button class="key" data-digit="2">2<span class="sub">ABC</span></button>
+          <button class="key" data-digit="3">3<span class="sub">DEF</span></button>
+          <button class="key" data-digit="4">4<span class="sub">GHI</span></button>
+          <button class="key" data-digit="5">5<span class="sub">JKL</span></button>
+          <button class="key" data-digit="6">6<span class="sub">MNO</span></button>
+          <button class="key" data-digit="7">7<span class="sub">PQRS</span></button>
+          <button class="key" data-digit="8">8<span class="sub">TUV</span></button>
+          <button class="key" data-digit="9">9<span class="sub">WXYZ</span></button>
+          <button class="key" data-digit="*">＊<span class="sub"></span></button>
+          <button class="key" data-digit="0">0<span class="sub">+</span></button>
+          <button class="key" data-digit="#">＃<span class="sub"></span></button>
+        </div>
+        <div class="action-row">
+          <button class="action-side" id="btn-autodialer" title="Auto Dialer">⟳</button>
+          <button id="btn-call">📞</button>
+          <div class="action-placeholder"></div>
+        </div>
+      </div>
+
+      <!-- ── AUTO DIALER ── -->
+      <div id="view-autodialer" class="view">
+        <div class="view-header">
+          <button class="btn-back" id="btn-back-auto">‹</button>
+          <h2>Auto Dialer</h2>
+        </div>
+        <div class="view-body">
+          <!-- Large number input -->
+          <textarea id="auto-input" inputmode="numeric" placeholder="Type or paste digits, auto-splits every 10&#10;&#10;12345678909876543210...&#10;&#10;Unlimited numbers supported"></textarea>
+          <div id="auto-digit-count" class="digit-count">0 numbers</div>
+          <!-- Number list (shown during dial) -->
+          <div id="auto-list" class="auto-list" style="display:none">
+            <p class="empty" id="auto-empty">No numbers added yet.</p>
+          </div>
+          <!-- Progress -->
+          <div id="auto-progress"></div>
+          <!-- Idle controls -->
+          <div id="auto-ctrl-idle">
+            <div class="auto-btn-row single" style="margin-bottom:8px">
+              <button class="btn-primary" id="btn-start-auto">Start Auto Dial</button>
+            </div>
+            <div class="auto-btn-row single">
+              <button class="btn-ghost" id="btn-cancel-auto">Cancel</button>
+            </div>
+          </div>
+          <!-- Running controls -->
+          <div id="auto-ctrl-running" style="display:none">
+            <div class="auto-btn-row">
+              <button class="btn-primary amber" id="btn-pause-auto">⏸ Pause</button>
+              <button class="btn-primary red" id="btn-stop-auto">⏹ Stop</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── MESSAGES (thread list) ── -->
+      <div id="view-messages" class="view">
+        <div class="msg-header">
+          <h2>Messages</h2>
+          <button class="btn-icon" id="btn-compose" title="New message">＋</button>
+        </div>
+        <div id="threads-list">
+          <p class="loading">Loading…</p>
+        </div>
+      </div>
+
+      <!-- ── CONVERSATION ── -->
+      <div id="view-conversation" class="view">
+        <div class="conv-header">
+          <button class="btn-back" id="btn-back-conv">‹</button>
+          <span class="conv-number" id="conv-contact"></span>
+          <button class="btn-call-contact" id="btn-call-contact" title="Call">📞</button>
+        </div>
+        <div id="conv-messages"></div>
+        <div class="compose-row">
+          <textarea id="sms-body" rows="1" placeholder="Message…"></textarea>
+          <button id="btn-send-sms">➤</button>
+        </div>
+      </div>
+
+      <!-- ── COMPOSE NEW ── -->
+      <div id="view-compose" class="view">
+        <div class="view-header">
+          <button class="btn-back" id="btn-back-compose">‹</button>
+          <h2>New Message</h2>
+        </div>
+        <div class="to-row">
+          <label>To:</label>
+          <input id="sms-to" type="tel" placeholder="+1 555 000 0000" autocomplete="tel" />
+        </div>
+        <div class="new-body-area">
+          <textarea id="sms-text" placeholder="Type a message…"></textarea>
+        </div>
+        <div class="new-actions">
+          <button class="btn-primary" id="btn-send-new-sms" style="width:100%">Send</button>
+        </div>
+      </div>
+
+      <!-- ── RECENT ── -->
+      <div id="view-recent" class="view">
+        <div class="section-header">Recent</div>
+        <div id="recent-list">
+          <p class="loading">Loading…</p>
+        </div>
+      </div>
+
+      <!-- ── SETTINGS ── -->
+      <div id="view-settings" class="view">
+        <div class="section-header">Settings</div>
+        <div class="settings-body">
+          <p>Twilio account connected.</p>
+          <p>Calls and SMS use your configured Twilio number.</p>
+        </div>
+      </div>
+
+    </div><!-- /views -->
+
+    <!-- Tab bar -->
+    <div class="tab-bar">
+      <button class="tab" data-tab="recent">
+        <span class="ti">🕐</span>Recent
+      </button>
+      <button class="tab" data-tab="messages">
+        <span class="ti">💬</span>Messages
+      </button>
+      <button class="tab active" data-tab="keypad">
+        <span class="ti">⌨️</span>Keypad
+      </button>
+      <button class="tab" data-tab="settings">
+        <span class="ti">⚙️</span>Settings
+      </button>
+    </div>
+
+  </div>
+  <script type="module" src="./main.js"></script>
+</body>
+
+</html>
