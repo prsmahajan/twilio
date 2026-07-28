@@ -2,8 +2,23 @@ services:
   - type: web
     name: dialer
     runtime: python
+    plan: starter          # a persistent disk requires a paid instance; see `disk` below
     buildCommand: "pip install -r requirements.txt && cd frontend && npm install && npm run build"
-    startCommand: "gunicorn app:app"
+
+    # One worker on purpose. The data store is SQLite on a single mounted disk,
+    # and Render sets WEB_CONCURRENCY on paid plans, which gunicorn would
+    # otherwise honour and start several writers against the same file.
+    startCommand: "gunicorn -w 1 -k gthread --threads 8 --timeout 120 app:app"
+
+    healthCheckPath: /healthz
+
+    # Without this the SQLite file lives on the ephemeral filesystem and every
+    # deploy silently wipes all leads, campaigns and call history.
+    disk:
+      name: dialer-data
+      mountPath: /var/data
+      sizeGB: 1
+
     envVars:
       - key: TWILIO_ACCOUNT_SID
         sync: false
@@ -17,3 +32,29 @@ services:
         sync: false
       - key: TWILIO_PHONE_NUMBER
         sync: false
+
+      # Public https URL of this service, e.g. https://dialer-xxxx.onrender.com
+      # Twilio signs webhooks over the exact URL it requested, and Render
+      # terminates TLS upstream, so this must be set or every webhook 403s.
+      # Optional: routes SMS through a Messaging Service for A2P 10DLC.
+      - key: TWILIO_MESSAGING_SERVICE_SID
+        sync: false
+
+      - key: PUBLIC_BASE_URL
+        sync: false
+
+      # Keep the database on the mounted disk, not the ephemeral filesystem.
+      - key: DB_PATH
+        value: /var/data/dialer.db
+
+      # E.164 prefixes this app may dial. Anything else is refused.
+      # "*" allows every country. Twilio Voice Geo Permissions and your
+      # account balance become the real toll-fraud controls.
+      - key: ALLOWED_PREFIXES
+        value: "*"
+      - key: BLOCKED_PREFIXES
+        value: "+1900,+1976,+1809,+1829,+1849"
+      - key: DEFAULT_COUNTRY_CODE
+        value: "+1"
+      - key: CLIENT_IDENTITY
+        value: dialer-user

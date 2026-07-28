@@ -5,4 +5,17 @@ __pycache__/
 venv/
 .venv/
 frontend/node_modules/
-static/dist/
+# static/dist IS committed on purpose: PythonAnywhere free accounts have no
+# reliable Node toolchain, so the built frontend ships with the repo.
+# Rebuild with: cd frontend && npm run build
+
+# local sqlite call log (WAL mode adds -wal/-shm sidecars)
+*.db
+*.db-wal
+*.db-shm
+.env.bak
+.DS_Store
+tests/node_modules/
+
+# local screenshots — some contain Twilio SIDs / tunnel URLs
+ss-*.png
