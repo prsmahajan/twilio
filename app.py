@@ -3527,6 +3527,91 @@ def analytics_timing():
                     "min_attempts": MIN_ATTEMPTS_FOR_SIGNAL})
 
 
+# ── Pickup odds ───────────────────────────────────────────────────────────────
+# The dial clock says what time it is where the callee is; this says whether
+# anyone answers at that hour. Same question, two halves, so they render on the
+# same line above the keypad.
+#
+# Buckets are the CALLEE's local hour, not the agent's — which is what makes
+# this different from /api/analytics/timing. One 9am dialling session reaches a
+# New York lead at 9am and a Los Angeles lead at 6am; bucketing both under the
+# agent's clock averages two unrelated human moments into a number that
+# describes neither. Zones come from the number, and SQLite has no IANA database
+# to convert with, so the bucket is computed per row in Python.
+
+def _callee_local_hour(created_at, e164):
+    """The hour of day it was where the callee was, when the call was placed."""
+    zone = timezone_for_number(e164)
+    if not zone or ZoneInfo is None:
+        return None
+    try:
+        stamp = datetime.strptime(created_at, "%Y-%m-%d %H:%M:%S")
+    except (TypeError, ValueError):
+        return None
+    return stamp.replace(tzinfo=timezone.utc).astimezone(ZoneInfo(zone)).hour
+
+
+@app.route("/api/analytics/pickup", methods=["GET"])
+def analytics_pickup():
+    """Connect rate at the hour it currently is for `number`, from call history.
+
+    Hours below MIN_ATTEMPTS_FOR_SIGNAL attempts report `signal: false` and are
+    left out of `best_hours`: three-for-three is not a 100% pickup rate, and
+    showing it as one would send the agent chasing noise.
+    """
+    number = normalize_number(request.args.get("number", ""))
+    if not number:
+        return jsonify({"error": "invalid number"}), 400
+
+    win           = resolve_window()
+    where, params = win.filter(extra=("direction LIKE 'outbound%'",))
+
+    rows = get_db().execute(
+        f"""SELECT created_at, to_number,
+                   CASE WHEN {_CONNECTED_SQL} THEN 1 ELSE 0 END connected
+            FROM call_log WHERE {where}""",
+        params,
+    ).fetchall()
+
+    # hour -> [attempts, connected]
+    buckets = {}
+    for r in rows:
+        hour = _callee_local_hour(r["created_at"], r["to_number"])
+        if hour is None:                  # unmapped zone: no honest bucket for it
+            continue
+        slot = buckets.setdefault(hour, [0, 0])
+        slot[0] += 1
+        slot[1] += r["connected"]
+
+    local = local_time_for_number(number)
+    hour  = local.hour if local else None
+    here  = buckets.get(hour) if hour is not None else None
+
+    attempts  = sum(a for a, _ in buckets.values())
+    connected = sum(c for _, c in buckets.values())
+
+    hours = [{"hour": h, "calls": a, "connected": c, "rate": _rate(c, a)}
+             for h, (a, c) in sorted(buckets.items())]
+    best = sorted((h for h in hours if h["calls"] >= MIN_ATTEMPTS_FOR_SIGNAL),
+                  key=lambda h: (-h["rate"], h["hour"]))[:3]
+
+    return jsonify({
+        "number":       number,
+        "timezone":     timezone_for_number(number) or "",
+        "hour":         hour,
+        "calls":        here[0] if here else 0,
+        "connected":    here[1] if here else 0,
+        "rate":         _rate(here[1], here[0]) if here else 0.0,
+        "signal":       bool(here and here[0] >= MIN_ATTEMPTS_FOR_SIGNAL),
+        "overall_rate": _rate(connected, attempts),
+        "sample":       attempts,
+        "hours":        hours,
+        "best_hours":   best,
+        "days":         win.days,
+        "min_attempts": MIN_ATTEMPTS_FOR_SIGNAL,
+    })
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=False)

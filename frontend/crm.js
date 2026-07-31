@@ -4,7 +4,8 @@
 // and main.js never form an import cycle.
 
 import { $, api, json, patch, esc, formatNumber, fmtDate, fmtDur, initials, scrollIntoParent } from './lib.js';
-import { showLeadExtras } from './extras.js';
+import { showLeadExtras, stopLeadClock } from './extras.js';
+import { createCallClock } from './calltiming.js';
 
 let dialer = null;       // { placeCall, showView, setStatus, isBusy }
 let dispositionOptions = [];
@@ -290,6 +291,28 @@ const camp = {
   running: false, paused: false, timer: null, gap: 2,
 };
 
+// Local time and pickup odds for the lead the runner is on. An unattended queue
+// is exactly where a 6am dial goes unnoticed, so the campaign view carries the
+// same clock the keypad does. Created lazily — #cr-clock is not in the DOM when
+// this module is first imported.
+let _campClock = null;
+function campClock() {
+  if (!_campClock) _campClock = createCallClock($('cr-clock'));
+  return _campClock;
+}
+
+/** Stop the clocks belonging to views other than `id`. Called on navigation. */
+export function stopClocksOutside(id) {
+  if (id !== 'lead-detail')  stopLeadClock();
+  if (id !== 'campaign-run') _campClock?.stop();
+}
+
+/** Point the clock at whoever is up next, for the idle and stopped states. */
+function showUpcomingClock() {
+  const next = camp.queue.slice(camp.index).find(q => !q.done && !q.dnc);
+  campClock().track(next ? next.phone : null);
+}
+
 export async function loadCampaigns() {
   const list = $('camp-list');
   list.innerHTML = '<p class="loading">Loading…</p>';
@@ -331,6 +354,7 @@ async function openCampaign(id) {
 
   $('cr-name').textContent = c.name;
   await refreshQueue();
+  showUpcomingClock();          // visible before Start, not only after
   dialer.showView('campaign-run');
 }
 
@@ -379,6 +403,9 @@ function dialNextInCampaign() {
 
   renderQueue();
   $('cr-current').textContent = item.name || formatNumber(item.phone);
+  // A queue crosses timezones, so the clock has to follow the lead being dialled
+  // rather than being set once when the campaign opens.
+  campClock().track(item.phone);
   dialer.placeCall(item.phone, { leadId: item.lead_id, campaignId: camp.id });
 }
 
@@ -412,6 +439,7 @@ function stopCampaign(msg = 'Stopped') {
   $('cr-ctrl-running').style.display = 'none';
   $('cr-current').textContent = msg;
   renderQueue();
+  showUpcomingClock();
 }
 
 function wireCampaigns() {

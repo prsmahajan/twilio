@@ -34,11 +34,14 @@ await page.click('#btn-leads-import');
 await page.waitForTimeout(400);
 ck('import view open', await page.isVisible('#import-csv'), true);
 
-await page.fill('#import-csv', 'name,phone,company\nAda Lovelace,5551110001,Analytical\nGrace Hopper,5551110002,Navy\nBad Row,xxx,Nope\n');
+// Alan leads the file so he is first in any campaign queue built from it, and
+// he carries a real area code: 555 numbers resolve to no timezone, so the clock
+// assertions below need one lead whose zone actually exists.
+await page.fill('#import-csv', 'name,phone,company\nAlan Turing,2125550111,Bletchley\nAda Lovelace,5551110001,Analytical\nGrace Hopper,5551110002,Navy\nBad Row,xxx,Nope\n');
 await page.click('#btn-import-csv');
 await page.waitForTimeout(900);
 const rep = await page.textContent('#import-result');
-ck('reports 2 imported', /2<\/b> imported|2 imported/.test(rep.replace(/\s+/g, ' ')), true);
+ck('reports 3 imported', /3<\/b> imported|3 imported/.test(rep.replace(/\s+/g, ' ')), true);
 ck('reports 1 unreadable', /1 unreadable/.test(rep), true);
 
 console.log('\n=== bad Google Sheet URL surfaces a real message ===');
@@ -82,6 +85,26 @@ ck('DNC badge appears in list', dncBadge.includes('DNC'), true);
 await page.fill('#leads-search', '');
 await page.waitForTimeout(600);
 
+console.log('\n=== lead clock ===');
+// The lead's own local time, so the call button is never pressed blind. Same
+// component as the keypad clock — see frontend/calltiming.js.
+await page.fill('#leads-search', 'Alan');
+await page.waitForTimeout(600);
+await page.click('.lead-item');
+await page.waitForTimeout(1200);
+ck('lead clock shown', await page.isVisible('#ld-clock'), true);
+const ldClock = await page.textContent('#ld-clock');
+ck('lead clock shows a time', /\d{2}:\d{2}:\d{2}/.test(ldClock), true);
+ck('lead clock names the country', /US\/Canada/.test(ldClock), true);
+
+// Ticking is per-view: leaving has to stop it, or every lead ever opened keeps
+// a timer alive for the life of the page.
+await page.click('#btn-back-leads');
+await page.waitForTimeout(500);
+ck('lead clock stops on exit', await page.isHidden('#ld-clock'), true);
+await page.fill('#leads-search', '');
+await page.waitForTimeout(600);
+
 console.log('\n=== campaign create + queue ===');
 await page.click('.tab[data-tab="campaigns"]');
 await page.waitForTimeout(450);
@@ -99,6 +122,23 @@ ck('campaign name shown', await page.textContent('#cr-name'), 'Playwright Campai
 const qlen = (await page.$$('#cr-queue .auto-num-item')).length;
 ck('queue populated', qlen >= 1, true);
 
+// An unattended queue is where a 4am dial goes unnoticed, so the runner shows
+// the same clock — pointed at whoever is up next, before Start is pressed.
+await page.waitForTimeout(1000);
+ck('campaign clock shown before start', await page.isVisible('#cr-clock'), true);
+const crFirst = (await page.textContent('#cr-clock')).match(/\d{2}:\d{2}:\d{2}/)[0];
+await page.waitForTimeout(1500);
+const crSecond = (await page.textContent('#cr-clock')).match(/\d{2}:\d{2}:\d{2}/)[0];
+ck('campaign clock is live', crFirst !== crSecond, true);
+
+await page.click('.tab[data-tab="keypad"]');
+await page.waitForTimeout(500);
+ck('campaign clock stops when the view is left',
+   await page.isHidden('#cr-clock'), true);
+await page.click('.tab[data-tab="campaigns"]');
+await page.waitForTimeout(600);
+await page.click('.camp-item');
+await page.waitForTimeout(900);
 // The DNC lead must be excluded from the queue entirely.
 const queueText = await page.textContent('#cr-queue');
 ck('DNC lead excluded from queue', /Grace/.test(queueText), false);

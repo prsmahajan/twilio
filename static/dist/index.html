@@ -24,6 +24,11 @@
       --badge-bg:    #ebf5ff;
       --badge-text:  #0068d6;
 
+      /* Status accents. Both are read as small text on white, so these are the
+         darker end of the Geist ramp rather than the vivid mid-tones. */
+      --amber:       #ab5800;
+      --green:       #0f7b33;
+
       /* Workflow accents — functional only, never decorative. */
       --develop:     #0a72ef;
       --preview:     #de1d8d;
@@ -276,12 +281,19 @@
       margin: -4px 0 8px;
       flex-shrink: 0;
       font-feature-settings: "tnum" 1;
+      /* Each part stays whole; the row wraps between parts rather than mid-phrase
+         if a long zone name ever outgrows the width. */
+      flex-wrap: wrap;
+      white-space: nowrap;
     }
 
     .dial-clock[hidden] { display: none; }
     .dial-clock .dc-time { font-weight: 500; color: var(--text); }
     .dial-clock.outside .dc-time { color: var(--amber); }
     .dial-clock .dc-warn { color: var(--amber); }
+    .dial-clock .dc-odds { color: var(--text-4); }
+    .dial-clock .dc-odds.good { color: var(--green); }
+    .dial-clock .dc-odds.poor { color: var(--amber); }
 
     /* Characters used out of the single-SMS-segment budget. */
     .char-count {
@@ -1556,7 +1568,7 @@
       color: var(--text-3);
     }
   </style>
-  <script type="module" crossorigin src="/assets/index-DUxgaAYi.js"></script>
+  <script type="module" crossorigin src="/assets/index-CLhTho0s.js"></script>
   <link rel="stylesheet" crossorigin href="/assets/index-BlOx-ify.css">
 </head>
 
@@ -1846,6 +1858,7 @@
             <button class="ld-call" id="btn-ld-call" title="Call">📞</button>
           </div>
           <div class="ld-badges" id="ld-badges"></div>
+          <div class="dial-clock" id="ld-clock" hidden></div>
           <div class="ld-window" id="ld-window"></div>
         </div>
         <div class="view-body">
@@ -2001,6 +2014,7 @@
           <div class="cr-current-wrap">
             <div class="cr-label">Now calling</div>
             <div class="cr-current" id="cr-current">Ready to start</div>
+            <div class="dial-clock" id="cr-clock" hidden></div>
           </div>
           <div class="bar"><div class="bar-fill" id="cr-bar-fill" style="width:0%"></div></div>
           <div class="cr-progress" id="cr-progress"></div>

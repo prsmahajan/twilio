@@ -180,6 +180,45 @@ check("reports the zone", comp["timezone"], "America/New_York")
 check("not on dnc", comp["dnc"], False)
 check("bad number refused", c.get("/api/compliance/check?number=123").status_code, 400)
 
+print("\n=== pickup odds ===")
+# Two numbers, two zones, one wall-clock hour apart. Both are dialled at 15:00
+# *their* local time, from UTC instants three hours apart — so a correct
+# implementation puts all of it in hour 15, and a viewer-timezone one scatters it.
+from datetime import datetime, timezone as _tz
+from zoneinfo import ZoneInfo
+
+with A.app.app_context():
+    db = A.get_db()
+    n = 0
+    for number, zone, connects in (("+12125551212", "America/New_York", 6),
+                                   ("+13105550111", "America/Los_Angeles", 4)):
+        for i in range(10):
+            local = datetime.now(ZoneInfo(zone)).replace(
+                hour=15, minute=0, second=0, microsecond=0) - timedelta(days=i + 1)
+            n += 1
+            db.execute(
+                "INSERT INTO call_log (call_sid, direction, to_number, status,"
+                " created_at, owner_id) VALUES (?,?,?,?,?,?)",
+                (f"CApick{n}", "outbound-dial", number,
+                 "completed" if i < connects else "no-answer",
+                 local.astimezone(_tz.utc).strftime("%Y-%m-%d %H:%M:%S"), "default"))
+    db.commit()
+
+odds = c.get("/api/analytics/pickup?number=2125551212&days=30&tz=0").get_json()
+by_hour = {h["hour"]: h for h in odds["hours"]}
+check("both zones land in the callee's 15:00", sorted(by_hour), [15])
+check("attempts pooled across zones", by_hour[15]["calls"], 20)
+check("rate is connected over attempts", by_hour[15]["rate"], 50.0)
+check("best hour named", [b["hour"] for b in odds["best_hours"]], [15])
+check("bad number refused",
+      c.get("/api/analytics/pickup?number=123").status_code, 400)
+
+# An hour nobody has dialled must report no signal rather than a 0% verdict.
+thin = c.get("/api/analytics/pickup?number=2125551212&days=30&tz=0").get_json()
+check("thin hour carries no signal",
+      thin["signal"] if thin["hour"] != 15 else "n/a",
+      False if thin["hour"] != 15 else "n/a")
+
 print("\n=== follow-up tasks ===")
 t = c.post("/api/tasks", json={"lead_id": lid, "title": "Call back", "due_at": "+2h"})
 check("task created", t.status_code, 201)

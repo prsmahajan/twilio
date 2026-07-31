@@ -5,6 +5,7 @@
 // dialer core is injected through init() so no module imports its caller.
 
 import { $, api, json, patch, esc, formatNumber, fmtDate, fmtDur } from './lib.js';
+import { createCallClock } from './calltiming.js';
 
 let dialer = null;      // { placeCall, showView, setStatus }
 let config = {};        // server feature flags, see /api/config
@@ -375,6 +376,20 @@ export async function showLeadExtras(lead) {
 
   loadTimeline(lead.id);
   checkWindow(lead.phone);
+  leadClock().track(lead.phone);
+}
+
+// The lead detail's own clock. Created lazily because extras.js is imported
+// before the DOM is parsed, so #ld-clock does not exist at module scope.
+let _leadClock = null;
+function leadClock() {
+  if (!_leadClock) _leadClock = createCallClock($('ld-clock'));
+  return _leadClock;
+}
+
+/** Stop ticking when the detail view is left, so a closed lead costs nothing. */
+export function stopLeadClock() {
+  _leadClock?.stop();
 }
 
 // Advisory only — the server refuses out-of-window calls regardless. This just

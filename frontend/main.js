@@ -11,6 +11,7 @@ import { Device } from '@twilio/voice-sdk';
 import { esc, fmtDate, fmtDur, normalizeNumber, formatNumber, api, json, scrollIntoParent } from './lib.js';
 import * as crm from './crm.js';
 import * as extras from './extras.js';
+import { createCallClock } from './calltiming.js';
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 const statusBar       = document.getElementById('status-bar');
@@ -142,91 +143,12 @@ function setDial(s) {
 // ── Callee local time ─────────────────────────────────────────────────────────
 // Dialling 9pm your time can be 4am theirs. The clock above the keypad shows the
 // callee's wall time as it ticks, so the mistake is visible before the call.
-//
-// The zone comes from the server, which resolves it from the NANP area code or
-// the country calling code; the ticking is local, so a number being typed costs
-// one request, not one per second.
-let clockZone = null;      // IANA zone for the number currently displayed
-let clockLabel = '';       // country name shown next to the time
-let clockOutside = false;  // outside the permitted calling window
-let clockTimer = null;
-let clockLookup = null;    // debounce handle
-let clockNumber = '';      // the number the current zone belongs to
+// Shared with the lead detail and the campaign runner — see calltiming.js.
+const dialClock = createCallClock(dialClockEl);
 
 function trackCalleeClock(e164) {
-  if (!dialClockEl) return;
-  clearTimeout(clockLookup);
-
-  if (!e164) {
-    stopCalleeClock();
-    return;
-  }
-  if (e164 === clockNumber) return;
-
   // Every keystroke changes the number, so the lookup waits for a pause.
-  clockLookup = setTimeout(() => lookupCalleeZone(e164), 350);
-}
-
-function stopCalleeClock() {
-  clearInterval(clockTimer);
-  clockTimer = null;
-  clockZone = null;
-  clockNumber = '';
-  dialClockEl.hidden = true;
-  dialClockEl.textContent = '';
-}
-
-async function lookupCalleeZone(e164) {
-  try {
-    const info = await api(`/api/compliance/check?number=${encodeURIComponent(e164)}`);
-    // A slower reply for an older number must not overwrite a newer one.
-    if (normalizeNumber(dialString) !== e164) return;
-
-    clockNumber  = e164;
-    clockZone    = info.timezone || null;
-    clockLabel   = info.country || '';
-    clockOutside = info.enforced && !info.in_window;
-
-    if (!clockZone) {
-      // Unknown zone: say so rather than showing the agent's own clock, which
-      // would read as the callee's.
-      dialClockEl.hidden = false;
-      dialClockEl.classList.remove('outside');
-      dialClockEl.innerHTML =
-        `<span>🌐</span><span>Local time unknown${clockLabel ? ' · ' + esc(clockLabel) : ''}</span>`;
-      clearInterval(clockTimer);
-      clockTimer = null;
-      return;
-    }
-
-    dialClockEl.hidden = false;
-    renderCalleeClock();
-    clearInterval(clockTimer);
-    clockTimer = setInterval(renderCalleeClock, 1000);
-  } catch {
-    stopCalleeClock();
-  }
-}
-
-function renderCalleeClock() {
-  if (!clockZone) return;
-  let time;
-  try {
-    time = new Intl.DateTimeFormat([], {
-      timeZone: clockZone, hour: '2-digit', minute: '2-digit',
-      second: '2-digit', hour12: false,
-    }).format(new Date());
-  } catch {
-    // A zone this browser's ICU data does not know: drop the clock rather than
-    // showing a time from the wrong place.
-    stopCalleeClock();
-    return;
-  }
-  dialClockEl.classList.toggle('outside', clockOutside);
-  dialClockEl.innerHTML =
-    `<span>🕐</span><span class="dc-time">${esc(time)}</span>` +
-    (clockLabel ? `<span>· ${esc(clockLabel)}</span>` : '') +
-    (clockOutside ? '<span class="dc-warn">· outside calling hours</span>' : '');
+  dialClock.track(e164, { debounce: 350 });
 }
 
 // ── View navigation ───────────────────────────────────────────────────────────
@@ -243,6 +165,11 @@ function showView(id) {
   const views = el.parentElement;
   if (views.scrollLeft) views.scrollLeft = 0;
   activeView = id;
+
+  // Every clock ticks once a second. A view you have navigated away from should
+  // not be one of them, and stopping centrally covers the back buttons, the tab
+  // bar and anything added later.
+  crm.stopClocksOutside(id);
 
   const tab = TAB_OF[id] || id;
   document.querySelectorAll('.tab').forEach(t =>
