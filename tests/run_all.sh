@@ -10,6 +10,11 @@ PY="$ROOT/venv/bin/python"
 
 # Optional feature flags. Off for the original suites so they keep testing the
 # default configuration; the extras suite turns them on.
+#
+# QUIET_HOURS_ENFORCED is pinned off in start_server rather than left unset:
+# app.py calls load_dotenv(), so a developer's own .env would otherwise decide
+# it, and the clock hides the country label when a call is out of window — which
+# made two UI assertions pass or fail depending on the hour of the run.
 EXTRA_ENV=""
 
 start_server() {
@@ -23,6 +28,7 @@ start_server() {
   TWILIO_APP_SID=AP00000000000000000000000000000000 \
   TWILIO_PHONE_NUMBER=+15550000000 \
   PUBLIC_BASE_URL=https://dialer.example.com \
+  QUIET_HOURS_ENFORCED=false \
   DB_PATH=/tmp/suite.db PORT=$PORT \
   env $EXTRA_ENV "$PY" "$ROOT/app.py" > /tmp/suite_server.log 2>&1 &
   for _ in $(seq 1 20); do

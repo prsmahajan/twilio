@@ -87,10 +87,14 @@ services:
 
       # US TCPA calling window, enforced in the callee's local time. That time is
       # inferred from the NANP area code, or from the country calling code for
-      # countries that sit in a single timezone. Off by default so non-US
-      # deployments are not silently restricted.
+      # countries that sit in a single timezone. A number whose zone cannot be
+      # inferred is allowed rather than blocked — see timezone_for_number().
+      #
+      # On, so out-of-window calls are refused at /connect before Twilio is
+      # billed. Note this is the *callee's* clock: from IST, the US window falls
+      # roughly 18:30–07:30 local, so daytime dials to US numbers are refused.
       - key: QUIET_HOURS_ENFORCED
-        value: "false"
+        value: "true"
       - key: CALL_WINDOW_START
         value: "8"
       - key: CALL_WINDOW_END
