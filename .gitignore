@@ -17,8 +17,10 @@ frontend/node_modules/
 .DS_Store
 tests/node_modules/
 
-# local screenshots — some contain Twilio SIDs / tunnel URLs
-ss-*.png
+# local screenshots — some contain Twilio SIDs, tunnel URLs or real numbers.
+# Matches ss1.png as well as ss-1.png: the earlier `ss-*.png` let the unhyphenated
+# ones through.
+ss*.png
 
 # Firecrawl scratch output
 .firecrawl/

@@ -20,7 +20,13 @@ os.environ.update({
 })
 
 import app as A
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
+
+# The analytics endpoints bucket by the viewer's UTC offset, which the browser
+# sends as `tz`. Tests that assert on "today" have to send it too — otherwise
+# the server answers in UTC and the suite fails for every run that happens on a
+# different calendar day locally than in UTC (in IST, 00:00 to 05:30).
+TZ = round(datetime.now().astimezone().utcoffset().total_seconds() / 60)
 from twilio.request_validator import RequestValidator
 
 fails = []
@@ -184,7 +190,6 @@ print("\n=== pickup odds ===")
 # Two numbers, two zones, one wall-clock hour apart. Both are dialled at 15:00
 # *their* local time, from UTC instants three hours apart — so a correct
 # implementation puts all of it in hour 15, and a viewer-timezone one scatters it.
-from datetime import datetime, timezone as _tz
 from zoneinfo import ZoneInfo
 
 with A.app.app_context():
@@ -201,7 +206,7 @@ with A.app.app_context():
                 " created_at, owner_id) VALUES (?,?,?,?,?,?)",
                 (f"CApick{n}", "outbound-dial", number,
                  "completed" if i < connects else "no-answer",
-                 local.astimezone(_tz.utc).strftime("%Y-%m-%d %H:%M:%S"), "default"))
+                 local.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"), "default"))
     db.commit()
 
 odds = c.get("/api/analytics/pickup?number=2125551212&days=30&tz=0").get_json()
@@ -436,7 +441,7 @@ for key in ("range", "sms", "funnel", "top_leads", "by_lead_status",
     check(f"analytics exposes {key}", key in a, True)
 
 today = date.today().isoformat()
-one = c.get("/api/analytics?days=1").get_json()
+one = c.get(f"/api/analytics?days=1&tz={TZ}").get_json()
 check("one day window is one bucket", len(one["by_day"]), 1)
 check("one day window ends today", one["range"]["to"], today)
 check("every day in the range is present", len(c.get("/api/analytics?days=7")
