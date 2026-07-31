@@ -4,6 +4,7 @@
 // and main.js never form an import cycle.
 
 import { $, api, json, patch, esc, formatNumber, fmtDate, fmtDur, initials, scrollIntoParent } from './lib.js';
+import { showLeadExtras } from './extras.js';
 
 let dialer = null;       // { placeCall, showView, setStatus, isBusy }
 let dispositionOptions = [];
@@ -14,6 +15,7 @@ export function init(host) {
   wireImport();
   wireCampaigns();
   wireDisposition();
+  wireAnalytics();
   api('/api/disposition-options').then(o => { dispositionOptions = o; }).catch(() => {});
 }
 
@@ -75,6 +77,9 @@ async function openLead(id) {
   $('ld-avatar').textContent  = initials(lead.name, lead.phone);
 
   dialer.showView('lead-detail');
+
+  // Timeline, enrichment badges and the calling-window notice live in extras.js.
+  showLeadExtras(lead);
 
   const hist = $('ld-history');
   hist.innerHTML = '<p class="loading">Loading…</p>';
@@ -523,49 +528,373 @@ function wireDisposition() {
 // Analytics
 // ══════════════════════════════════════════════════════════════════════════════
 
+// Filter state. Persisted so the range you work in survives a reload rather
+// than snapping back to 14 days every time the view opens.
+const AN_STORE = 'dialer.analytics.filters';
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+let anFilters = { range: '14', from: '', to: '', campaign: '' };
+
+function loadAnFilters() {
+  try {
+    Object.assign(anFilters, JSON.parse(localStorage.getItem(AN_STORE) || '{}'));
+  } catch { /* corrupt or unavailable storage falls back to the defaults */ }
+}
+
+function saveAnFilters() {
+  try { localStorage.setItem(AN_STORE, JSON.stringify(anFilters)); } catch { }
+}
+
+// Buckets are computed in the viewer's timezone, so the offset travels with
+// every request. Matches Python's expectation: minutes east of UTC.
+const tzMinutes = () => -new Date().getTimezoneOffset();
+
+function anQuery(extra = {}) {
+  const p = new URLSearchParams();
+  if (anFilters.range === 'custom' && anFilters.from && anFilters.to) {
+    p.set('from', anFilters.from);
+    p.set('to', anFilters.to);
+  } else {
+    p.set('days', anFilters.range === 'custom' ? '14' : anFilters.range);
+  }
+  if (anFilters.campaign) p.set('campaign_id', anFilters.campaign);
+  p.set('tz', String(tzMinutes()));
+  for (const [k, v] of Object.entries(extra)) p.set(k, v);
+  return p.toString();
+}
+
+export function wireAnalytics() {
+  const range = $('analytics-range');
+  if (!range) return;
+  loadAnFilters();
+
+  range.value = anFilters.range;
+  $('analytics-campaign').value = anFilters.campaign;
+  $('analytics-from').value = anFilters.from;
+  $('analytics-to').value = anFilters.to;
+  syncCustomRange();
+
+  range.addEventListener('change', () => {
+    anFilters.range = range.value;
+    syncCustomRange();
+    saveAnFilters();
+    // A freshly picked custom range has no dates yet; wait for them.
+    if (anFilters.range !== 'custom' || (anFilters.from && anFilters.to)) loadAnalytics();
+  });
+
+  $('analytics-campaign').addEventListener('change', (e) => {
+    anFilters.campaign = e.target.value;
+    saveAnFilters();
+    loadAnalytics();
+  });
+
+  for (const id of ['analytics-from', 'analytics-to']) {
+    $(id).addEventListener('change', () => {
+      anFilters.from = $('analytics-from').value;
+      anFilters.to   = $('analytics-to').value;
+      saveAnFilters();
+      if (anFilters.from && anFilters.to) loadAnalytics();
+    });
+  }
+
+  $('btn-analytics-export').addEventListener('click', () => {
+    window.location = `/api/analytics/export.csv?${anQuery()}`;
+  });
+
+  // Twilio attaches a price to a call minutes after it ends, so the cost figures
+  // fill in on demand rather than being known at hangup.
+  $('btn-analytics-costs').addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    btn.textContent = 'Syncing…';
+    try {
+      const r = await api('/api/costs/sync', { method: 'POST' });
+      const left = r.still_unpriced.calls + r.still_unpriced.messages;
+      dialer.setStatus(
+        `Priced ${r.calls_priced} calls, ${r.messages_priced} texts` +
+        (left ? ` · ${left} still pending with Twilio` : ''));
+      await loadAnalytics();
+    } catch (err) {
+      dialer.setStatus('Cost sync failed: ' + err.message, 'error');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Sync costs';
+    }
+  });
+}
+
+// Money is formatted to the cent for readable totals, but a sub-cent spend has
+// to survive too — a 12-call day can genuinely cost $0.0042. A symbol is used
+// where one is known so the figure stays on one line in a stat tile.
+const CURRENCY_SYMBOLS = { USD: '$', GBP: '£', EUR: '€', INR: '₹', AUD: 'A$', CAD: 'C$' };
+
+function fmtMoney(amount, currency) {
+  const n = Number(amount) || 0;
+  const digits = n > 0 && n < 0.1 ? 4 : 2;
+  const symbol = CURRENCY_SYMBOLS[currency];
+  return symbol ? `${symbol}${n.toFixed(digits)}`
+                : `${n.toFixed(digits)} ${currency || ''}`.trim();
+}
+
+function syncCustomRange() {
+  const custom = $('analytics-custom');
+  if (custom) custom.hidden = anFilters.range !== 'custom';
+}
+
+// The campaign filter is populated from the campaign list rather than hardcoded,
+// and refreshed on each load so a campaign created since last visit shows up.
+async function fillCampaignFilter() {
+  const sel = $('analytics-campaign');
+  if (!sel) return;
+  try {
+    const campaigns = await api('/api/campaigns');
+    sel.innerHTML = '<option value="">All campaigns</option>' +
+      campaigns.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
+    // A campaign that has since been deleted cannot stay selected.
+    sel.value = campaigns.some(c => String(c.id) === anFilters.campaign)
+      ? anFilters.campaign : '';
+    if (sel.value !== anFilters.campaign) {
+      anFilters.campaign = sel.value;
+      saveAnFilters();
+    }
+  } catch { /* the filter stays at "All campaigns" */ }
+}
+
+// Period-over-period change. Prefixed with a sign, coloured by whether the
+// direction is good for that metric — more calls is good, more failures is not.
+function deltaChip(now, prev, { good = 'up', suffix = '' } = {}) {
+  if (prev === undefined || prev === null) return '';
+  if (!prev && !now) return '';
+  // Up from nothing: still coloured by whether up is the good direction, so a
+  // first failure does not read as a win.
+  if (!prev) return `<span class="delta ${good === 'up' ? 'up' : 'down'}">new</span>`;
+  const change = (now - prev) / prev * 100;
+  if (Math.abs(change) < 0.5) return '<span class="delta">no change</span>';
+  const dir = change > 0 ? 'up' : 'down';
+  const cls = good === 'none' ? '' : (dir === good ? 'up' : 'down');
+  return `<span class="delta ${cls}">${change > 0 ? '+' : ''}${change.toFixed(0)}%${suffix}</span>`;
+}
+
+function statTile(label, value, chip = '', cls = '') {
+  return `<div class="stat">
+    <span class="stat-n ${cls}">${value}</span>
+    <span class="stat-l">${esc(label)}</span>
+    ${chip}
+  </div>`;
+}
+
+function barChart(rows, { value, label, title, max, cls = '' }) {
+  const top = Math.max(1, max ?? Math.max(...rows.map(value)));
+  return rows.map((r, i) => `
+    <div class="chart-col" title="${esc(title(r, i))}">
+      <div class="chart-stack">
+        <div class="chart-bar ${cls}" style="height:${value(r) / top * 100}%"></div>
+      </div>
+      <span class="chart-lbl">${esc(label(r, i))}</span>
+    </div>`).join('');
+}
+
+function breakdown(rows, key, empty, badge = true) {
+  if (!rows.length) return `<p class="empty" style="padding:12px">${esc(empty)}</p>`;
+  return rows.map(r => `
+    <div class="brk-row">
+      ${badge ? `<span class="disp ${esc(r[key])}">${esc(r[key])}</span>`
+              : `<span class="brk-l">${esc(r[key])}</span>`}
+      <span class="brk-n">${r.n}</span>
+    </div>`).join('');
+}
+
+function funnelBlock(f) {
+  const steps = [
+    ['Leads',      f.leads_total, 'dim'],
+    ['Dialled',    f.attempted,   ''],
+    ['Reached',    f.connected,   ''],
+    ['Progressed', f.advanced,    ''],
+  ];
+  const top = Math.max(1, f.leads_total || f.attempted);
+  return steps.map(([label, n, cls]) => `
+    <div class="funnel-row">
+      <span class="funnel-l">${label}</span>
+      <div class="funnel-track">
+        <div class="funnel-fill ${cls}" style="width:${Math.min(100, (n || 0) / top * 100)}%"></div>
+      </div>
+      <span class="funnel-n">${n || 0}</span>
+    </div>`).join('');
+}
+
+// Connect rate for every hour-and-weekday cell. Answers "when should I be
+// dialling" more directly than the two separate charts, which each average over
+// the other dimension.
+async function heatmapSection() {
+  let data;
+  try {
+    data = await api(`/api/analytics/timing?${anQuery()}`);
+  } catch {
+    return '';
+  }
+  const cells = new Map(data.grid.map(g => [`${g.weekday}:${g.hour}`, g]));
+  if (!cells.size) return '';
+
+  const hourLabels = ['<span></span>'].concat(
+    Array.from({ length: 24 }, (_, h) =>
+      `<span class="heat-lbl hour">${h % 3 ? '' : String(h).padStart(2, '0')}</span>`));
+
+  const rows = WEEKDAYS.map((name, wd) => {
+    const row = [`<span class="heat-lbl">${name}</span>`];
+    for (let h = 0; h < 24; h++) {
+      const cell = cells.get(`${wd}:${h}`);
+      if (!cell) {
+        row.push('<span class="heat-cell"></span>');
+        continue;
+      }
+      const thin = cell.calls < data.min_attempts;
+      // Rate drives opacity so the darkest cell is the best hour to call.
+      const shade = thin ? '' : `background: rgba(23,23,23,${0.12 + cell.rate / 100 * 0.88})`;
+      row.push(`<span class="heat-cell ${thin ? 'thin' : ''}" style="${shade}"
+        title="${name} ${String(h).padStart(2, '0')}:00 — ${cell.calls} calls, ${cell.rate}% connected${thin ? ' (too few to rank)' : ''}"></span>`);
+    }
+    return row.join('');
+  }).join('');
+
+  return `
+    <div class="sub-head">Connect rate by hour and day</div>
+    <div class="heat-wrap"><div class="heat">${hourLabels.join('')}${rows}</div></div>
+    <div class="chart-key">
+      <span><i class="sw connected"></i>Darker is a better time to call</span>
+      <span>Outlined: under ${data.min_attempts} attempts</span>
+    </div>`;
+}
+
 export async function loadAnalytics() {
   const wrap = $('analytics-body');
   wrap.innerHTML = '<p class="loading">Loading…</p>';
+  fillCampaignFilter();
   try {
-    const a = await api('/api/analytics?days=14');
+    // compare=1 costs one extra pair of aggregate queries and gives every
+    // headline number a trend, which a bare figure cannot convey.
+    const a = await api(`/api/analytics?${anQuery({ compare: '1' })}`);
+    const p = a.previous || {};
 
-    const max = Math.max(1, ...a.by_day.map(d => d.calls));
-    const bars = a.by_day.map(d => `
+    // Every day in the range is drawn, including empty ones. The date labels
+    // stop fitting past ten columns, so they thin out as the range widens.
+    const labelEvery = a.by_day.length > 24 ? 5 : a.by_day.length > 10 ? 2 : 1;
+    const dayMax = Math.max(1, ...a.by_day.map(d => d.calls));
+    const days = a.by_day.map((d, i) => `
       <div class="chart-col" title="${esc(d.day)}: ${d.calls} calls, ${d.connected} connected">
         <div class="chart-stack">
-          <div class="chart-bar" style="height:${d.calls / max * 100}%"></div>
-          <div class="chart-bar connected" style="height:${d.connected / max * 100}%"></div>
+          <div class="chart-bar" style="height:${d.calls / dayMax * 100}%"></div>
+          <div class="chart-bar connected" style="height:${d.connected / dayMax * 100}%"></div>
         </div>
-        <span class="chart-lbl">${esc(d.day.slice(5))}</span>
+        <span class="chart-lbl">${(a.by_day.length - 1 - i) % labelEvery ? '' : esc(d.day.slice(5))}</span>
       </div>`).join('');
 
-    const disp = a.by_disposition.length
-      ? a.by_disposition.map(d => `
-          <div class="brk-row">
-            <span class="disp ${esc(d.disposition)}">${esc(d.disposition)}</span>
-            <span class="brk-n">${d.n}</span>
-          </div>`).join('')
-      : '<p class="empty" style="padding:12px">No outcomes recorded yet.</p>';
+    // Connect rate by hour of day. Hours with no attempts are skipped rather
+    // than drawn as a 0% column, which would read as "nobody answers at 3am"
+    // when in fact nobody has tried.
+    const activeHours = (a.by_hour || []).filter(h => h.calls > 0);
+    const hours = activeHours.length ? `
+      <div class="sub-head">By hour of day (your time)</div>
+      <div class="chart">${barChart(activeHours, {
+        value: h => h.rate,
+        max: 100,
+        cls: 'connected',
+        label: h => String(h.hour).padStart(2, '0'),
+        title: h => `${String(h.hour).padStart(2, '0')}:00 — ${h.calls} calls, ${h.rate}% connected`,
+      })}</div>
+      <div class="chart-key"><span><i class="sw connected"></i>Connect rate</span></div>` : '';
+
+    const activeDows = (a.by_weekday || []).filter(d => d.calls > 0);
+    const weekdays = activeDows.length ? `
+      <div class="sub-head">By day of week</div>
+      <div class="chart">${barChart(activeDows, {
+        value: d => d.rate,
+        max: 100,
+        cls: 'connected',
+        label: d => WEEKDAYS[d.weekday] || '?',
+        title: d => `${WEEKDAYS[d.weekday]} — ${d.calls} calls, ${d.rate}% connected`,
+      })}</div>
+      <div class="chart-key"><span><i class="sw connected"></i>Connect rate</span></div>` : '';
+
+    const topLeads = (a.top_leads || []).length ? `
+      <div class="sub-head">Most dialled</div>
+      ${a.top_leads.map(l => `
+        <div class="an-lead-row">
+          <span class="an-lead-who">${esc(l.name || formatNumber(l.phone) || 'Unknown')}</span>
+          <span class="an-lead-meta">${l.calls}× · ${l.connected} reached · ${fmtDur(l.talk_seconds)}</span>
+        </div>`).join('')}` : '';
+
+    const sms  = a.sms || {};
+    const cost = a.cost || {};
+    const rangeLabel = a.days === 1 ? 'Today'
+      : anFilters.range === 'custom' ? `${a.range.from} to ${a.range.to}`
+      : `Last ${a.days} days`;
 
     wrap.innerHTML = `
       <div class="stat-grid">
-        <div class="stat"><span class="stat-n">${a.calls}</span><span class="stat-l">Calls</span></div>
-        <div class="stat"><span class="stat-n">${a.connect_rate}%</span><span class="stat-l">Connect rate</span></div>
-        <div class="stat"><span class="stat-n">${fmtDur(a.talk_seconds)}</span><span class="stat-l">Talk time</span></div>
-        <div class="stat"><span class="stat-n">${fmtDur(a.avg_duration)}</span><span class="stat-l">Avg call</span></div>
-        <div class="stat"><span class="stat-n">${a.leads_total}</span><span class="stat-l">Leads</span></div>
-        <div class="stat"><span class="stat-n">${a.leads_dnc}</span><span class="stat-l">Do not call</span></div>
+        ${statTile('Calls', a.calls, deltaChip(a.calls, p.calls))}
+        ${statTile('Connect rate', `${a.connect_rate}%`, deltaChip(a.connect_rate, p.connect_rate))}
+        ${statTile('Talk time', fmtDur(a.talk_seconds), deltaChip(a.talk_seconds, p.talk_seconds))}
+        ${statTile('Avg call', fmtDur(a.avg_duration), deltaChip(a.avg_duration, p.avg_duration))}
+        ${statTile('Texts sent', sms.sent ?? 0, deltaChip(sms.sent, p.sms && p.sms.sent))}
+        ${statTile('Reply rate', `${sms.reply_rate ?? 0}%`, deltaChip(sms.reply_rate, p.sms && p.sms.reply_rate))}
+        ${statTile('Texts failed', sms.failed ?? 0, deltaChip(sms.failed, p.sms && p.sms.failed, { good: 'down' }))}
+        ${statTile('Recordings', a.recordings ?? 0)}
+        ${statTile('Spend', fmtMoney(cost.total, cost.currency),
+                   deltaChip(cost.total, p.cost && p.cost.total, { good: 'down' }), 'money')}
+        ${statTile('Call spend', fmtMoney(cost.calls, cost.currency), '', 'money')}
+        ${statTile('Text spend', fmtMoney(cost.messages, cost.currency), '', 'money')}
+        ${statTile('Cost per connect', a.connected
+                   ? fmtMoney(cost.total / a.connected, cost.currency) : '—', '', 'money')}
+        ${statTile('Texts delivered', sms.delivered ?? 0,
+                   deltaChip(sms.delivered, p.sms && p.sms.delivered))}
+        ${statTile('Leads', a.leads_total)}
+        ${statTile('Do not call', a.leads_dnc)}
+        ${statTile('Follow-ups', a.tasks_open ?? 0)}
+        ${statTile('Overdue', a.tasks_overdue ?? 0, a.tasks_overdue ? '<span class="delta down">due</span>' : '')}
       </div>
 
-      <div class="sub-head">Last ${a.days} days</div>
-      ${a.by_day.length ? `<div class="chart">${bars}</div>
+      ${(cost.unpriced_calls || cost.unpriced_messages) ? `<div class="best-hour">
+        ${cost.unpriced_calls} calls and ${cost.unpriced_messages} texts are not
+        priced yet — spend is a floor, not the final bill. Tap <b>Sync costs</b>.
+      </div>` : ''}
+
+      ${a.best_hour ? `<div class="best-hour">
+        Best time to call: <b>${String(a.best_hour.hour).padStart(2, '0')}:00</b> —
+        ${a.best_hour.rate}% of ${a.best_hour.calls} calls connected
+      </div>` : ''}
+
+      ${a.best_weekday ? `<div class="best-hour">
+        Best day: <b>${WEEKDAYS[a.best_weekday.weekday]}</b> —
+        ${a.best_weekday.rate}% of ${a.best_weekday.calls} calls connected
+      </div>` : ''}
+
+      <div class="sub-head">Lead funnel</div>
+      ${funnelBlock(a.funnel || {})}
+
+      ${hours}
+      ${weekdays}
+      ${await heatmapSection()}
+
+      <div class="sub-head">${esc(rangeLabel)}</div>
+      ${a.calls ? `<div class="chart">${days}</div>
         <div class="chart-key">
           <span><i class="sw"></i>Calls</span>
           <span><i class="sw connected"></i>Connected</span>
         </div>` : '<p class="empty">No calls in this period.</p>'}
 
       <div class="sub-head">Outcomes</div>
-      ${disp}
+      ${breakdown(a.by_disposition || [], 'disposition', 'No outcomes recorded yet.')}
+
+      <div class="sub-head">Call results</div>
+      ${breakdown(a.by_status || [], 'status', 'No calls in this period.')}
+
+      <div class="sub-head">Lead stages</div>
+      ${breakdown(a.by_lead_status || [], 'status', 'No leads yet.')}
+
+      <div class="sub-head">Line types</div>
+      ${breakdown(a.by_line_type || [], 'line_type', 'Run Lookup on your leads to see this.', false)}
+
+      ${topLeads}
     `;
   } catch (e) {
     wrap.innerHTML = `<p class="empty">Error: ${esc(e.message)}</p>`;

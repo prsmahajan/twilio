@@ -49,6 +49,45 @@ await page.waitForTimeout(700);
 await page.dispatchEvent('#btn-backspace', 'pointerup');
 ck('long-press backspace clears', await page.textContent('#display'), '');
 
+console.log('\n=== callee local time ===');
+// The clock is what stops a 9pm dial landing at 4am for the callee, so it has to
+// appear for a domestic number and for an international one, and name the place.
+await page.dispatchEvent('#btn-backspace', 'pointerdown');
+await page.waitForTimeout(700);
+await page.dispatchEvent('#btn-backspace', 'pointerup');
+
+for (const d of '12125551212') await page.click(`.key[data-digit="${d}"]`);
+await page.waitForTimeout(1200);
+ck('clock shown for a US number', await page.isVisible('#dial-clock'), true);
+const usClock = await page.textContent('#dial-clock');
+ck('clock names the country', /US\/Canada/.test(usClock), true);
+ck('clock shows a time', /\d{2}:\d{2}:\d{2}/.test(usClock), true);
+
+// It must tick, not freeze on the value the server sent.
+const firstTick = (await page.textContent('#dial-clock')).match(/\d{2}:\d{2}:\d{2}/)[0];
+await page.waitForTimeout(1600);
+const secondTick = (await page.textContent('#dial-clock')).match(/\d{2}:\d{2}:\d{2}/)[0];
+ck('clock is live', firstTick !== secondTick, true);
+
+await page.dispatchEvent('#btn-backspace', 'pointerdown');
+await page.waitForTimeout(700);
+await page.dispatchEvent('#btn-backspace', 'pointerup');
+await page.waitForTimeout(400);
+ck('clock cleared with the number', await page.isVisible('#dial-clock'), false);
+
+// An Indian number resolves from its country code alone.
+await page.dispatchEvent('.key[data-digit="0"]', 'pointerdown');
+await page.waitForTimeout(700);
+await page.dispatchEvent('.key[data-digit="0"]', 'pointerup');
+for (const d of '919876543210') await page.click(`.key[data-digit="${d}"]`);
+await page.waitForTimeout(1200);
+ck('clock names India', /India/.test(await page.textContent('#dial-clock')), true);
+
+await page.dispatchEvent('#btn-backspace', 'pointerdown');
+await page.waitForTimeout(700);
+await page.dispatchEvent('#btn-backspace', 'pointerup');
+await page.waitForTimeout(300);
+
 console.log('\n=== invalid number rejected before dialing ===');
 await page.click('.key[data-digit="1"]');
 await page.click('#btn-call');

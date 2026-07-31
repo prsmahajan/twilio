@@ -10,12 +10,14 @@ import '@fontsource/geist-mono/500.css';
 import { Device } from '@twilio/voice-sdk';
 import { esc, fmtDate, fmtDur, normalizeNumber, formatNumber, api, json, scrollIntoParent } from './lib.js';
 import * as crm from './crm.js';
+import * as extras from './extras.js';
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 const statusBar       = document.getElementById('status-bar');
 const displayEl       = document.getElementById('display');
 const displayRowEl    = document.getElementById('display-row');
 const dialHintEl      = document.getElementById('dial-hint');
+const dialClockEl     = document.getElementById('dial-clock');
 const btnBackspace    = document.getElementById('btn-backspace');
 const btnCall         = document.getElementById('btn-call');
 const btnAutodialer   = document.getElementById('btn-autodialer');
@@ -123,6 +125,7 @@ function setDial(s) {
   if (!s) {
     dialHintEl.textContent = '';
     dialHintEl.style.color = '';
+    trackCalleeClock(null);
     return;
   }
   const n = normalizeNumber(s);
@@ -133,6 +136,97 @@ function setDial(s) {
     dialHintEl.textContent = 'Needs a country code — hold 0 for +';
     dialHintEl.style.color = 'var(--amber)';
   }
+  trackCalleeClock(n);
+}
+
+// ── Callee local time ─────────────────────────────────────────────────────────
+// Dialling 9pm your time can be 4am theirs. The clock above the keypad shows the
+// callee's wall time as it ticks, so the mistake is visible before the call.
+//
+// The zone comes from the server, which resolves it from the NANP area code or
+// the country calling code; the ticking is local, so a number being typed costs
+// one request, not one per second.
+let clockZone = null;      // IANA zone for the number currently displayed
+let clockLabel = '';       // country name shown next to the time
+let clockOutside = false;  // outside the permitted calling window
+let clockTimer = null;
+let clockLookup = null;    // debounce handle
+let clockNumber = '';      // the number the current zone belongs to
+
+function trackCalleeClock(e164) {
+  if (!dialClockEl) return;
+  clearTimeout(clockLookup);
+
+  if (!e164) {
+    stopCalleeClock();
+    return;
+  }
+  if (e164 === clockNumber) return;
+
+  // Every keystroke changes the number, so the lookup waits for a pause.
+  clockLookup = setTimeout(() => lookupCalleeZone(e164), 350);
+}
+
+function stopCalleeClock() {
+  clearInterval(clockTimer);
+  clockTimer = null;
+  clockZone = null;
+  clockNumber = '';
+  dialClockEl.hidden = true;
+  dialClockEl.textContent = '';
+}
+
+async function lookupCalleeZone(e164) {
+  try {
+    const info = await api(`/api/compliance/check?number=${encodeURIComponent(e164)}`);
+    // A slower reply for an older number must not overwrite a newer one.
+    if (normalizeNumber(dialString) !== e164) return;
+
+    clockNumber  = e164;
+    clockZone    = info.timezone || null;
+    clockLabel   = info.country || '';
+    clockOutside = info.enforced && !info.in_window;
+
+    if (!clockZone) {
+      // Unknown zone: say so rather than showing the agent's own clock, which
+      // would read as the callee's.
+      dialClockEl.hidden = false;
+      dialClockEl.classList.remove('outside');
+      dialClockEl.innerHTML =
+        `<span>🌐</span><span>Local time unknown${clockLabel ? ' · ' + esc(clockLabel) : ''}</span>`;
+      clearInterval(clockTimer);
+      clockTimer = null;
+      return;
+    }
+
+    dialClockEl.hidden = false;
+    renderCalleeClock();
+    clearInterval(clockTimer);
+    clockTimer = setInterval(renderCalleeClock, 1000);
+  } catch {
+    stopCalleeClock();
+  }
+}
+
+function renderCalleeClock() {
+  if (!clockZone) return;
+  let time;
+  try {
+    time = new Intl.DateTimeFormat([], {
+      timeZone: clockZone, hour: '2-digit', minute: '2-digit',
+      second: '2-digit', hour12: false,
+    }).format(new Date());
+  } catch {
+    // A zone this browser's ICU data does not know: drop the clock rather than
+    // showing a time from the wrong place.
+    stopCalleeClock();
+    return;
+  }
+  dialClockEl.classList.toggle('outside', clockOutside);
+  dialClockEl.innerHTML =
+    `<span>🕐</span><span class="dc-time">${esc(time)}</span>` +
+    (clockLabel ? `<span>· ${esc(clockLabel)}</span>` : '') +
+    (clockOutside ? '<span class="dc-warn">· outside calling hours</span>' : '');
 }
 
 // ── View navigation ───────────────────────────────────────────────────────────
@@ -166,6 +260,7 @@ const TAB_OF = {
   campaigns: 'campaigns', 'campaign-new': 'campaigns', 'campaign-run': 'campaigns',
   messages: 'messages', conversation: 'messages', compose: 'messages',
   more: 'more', recent: 'more', analytics: 'more', settings: 'more',
+  tasks: 'more', recordings: 'more', templates: 'more',
 };
 
 const VIEW_LOADERS = {
@@ -175,6 +270,9 @@ const VIEW_LOADERS = {
   leads:     () => crm.loadLeads(),
   campaigns: () => crm.loadCampaigns(),
   analytics: () => crm.loadAnalytics(),
+  tasks:      () => extras.loadTasks(),
+  recordings: () => extras.loadRecordings(),
+  templates:  () => extras.loadTemplates(),
 };
 
 document.querySelectorAll('.tab').forEach(tab => {
@@ -980,16 +1078,26 @@ async function loadRecent() {
 
 // The CRM module drives calls through this interface rather than importing
 // main.js, which would create a cycle.
-crm.init({
+const dialerHost = {
   placeCall,
   showView,
   setStatus,
   hangup:  () => activeCall?.disconnect(),
   isBusy:  () => !!activeCall,
+};
+
+crm.init(dialerHost);
+extras.init(dialerHost);
+
+// Drops a pre-recorded message on the leg that answered, so the agent can move
+// on without waiting out the greeting.
+document.getElementById('btn-vm-drop').addEventListener('click', () => {
+  extras.dropVoicemail(callCtx.sid);
 });
 
 // Hooks so the call flows can be driven by tests without a live Twilio connection.
 window.__crm            = crm;
+window.__extras         = extras;
 window.__attach         = attachCall;
 window.__handleIncoming = handleIncoming;
 window.__normalize      = normalizeNumber;

@@ -19,3 +19,6 @@ tests/node_modules/
 
 # local screenshots — some contain Twilio SIDs / tunnel URLs
 ss-*.png
+
+# Firecrawl scratch output
+.firecrawl/

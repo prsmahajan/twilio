@@ -58,3 +58,40 @@ services:
         value: "+1"
       - key: CLIENT_IDENTITY
         value: dialer-user
+
+      # Call recording. Off by default: recording a two-party call without
+      # consent is illegal in all-party-consent jurisdictions. If you turn it
+      # on, set RECORDING_ANNOUNCEMENT so the callee is told.
+      - key: RECORD_CALLS
+        value: "false"
+      - key: RECORDING_ANNOUNCEMENT
+        sync: false
+
+      # Answering machine detection. Reports whether a human or a machine
+      # picked up; the verdict lands on the call and drives auto-disposition.
+      - key: AMD_ENABLED
+        value: "false"
+
+      # Publicly reachable mp3/wav played by the voicemail-drop button, or
+      # VOICEMAIL_MESSAGE for Twilio TTS if you have no audio file.
+      - key: VOICEMAIL_AUDIO_URL
+        sync: false
+      - key: VOICEMAIL_MESSAGE
+        sync: false
+
+      # Longest outbound text, in characters. 160 keeps every message a single
+      # SMS segment; raising it means the carrier splits the text and bills per
+      # part.
+      - key: SMS_MAX_LENGTH
+        value: "160"
+
+      # US TCPA calling window, enforced in the callee's local time. That time is
+      # inferred from the NANP area code, or from the country calling code for
+      # countries that sit in a single timezone. Off by default so non-US
+      # deployments are not silently restricted.
+      - key: QUIET_HOURS_ENFORCED
+        value: "false"
+      - key: CALL_WINDOW_START
+        value: "8"
+      - key: CALL_WINDOW_END
+        value: "21"

@@ -98,6 +98,7 @@ ck('campaign name shown', await page.textContent('#cr-name'), 'Playwright Campai
 
 const qlen = (await page.$$('#cr-queue .auto-num-item')).length;
 ck('queue populated', qlen >= 1, true);
+
 // The DNC lead must be excluded from the queue entirely.
 const queueText = await page.textContent('#cr-queue');
 ck('DNC lead excluded from queue', /Grace/.test(queueText), false);
@@ -152,8 +153,52 @@ await page.click('#view-more [data-goto="analytics"]');
 await page.waitForTimeout(900);
 ck('analytics view open', await page.isVisible('#analytics-body'), true);
 const stats = await page.$$eval('.stat-n', e => e.map(x => x.textContent));
-ck('six stat tiles', stats.length, 6);
+// Calls, connect rate, talk time, avg call, texts sent, reply rate, texts failed,
+// recordings, spend, call spend, text spend, cost per connect, texts delivered,
+// leads, do-not-call, follow-ups, overdue.
+ck('seventeen stat tiles', stats.length, 17);
 ck('stats are populated', stats.every(s => s.length > 0), true);
+
+// Every section the view renders, so a broken payload key is caught here rather
+// than showing up as a silently missing block.
+const heads = await page.$$eval('#analytics-body .sub-head', e => e.map(x => x.textContent.trim()));
+ck('funnel rendered', heads.includes('Lead funnel'), true);
+ck('call results rendered', heads.includes('Call results'), true);
+ck('lead stages rendered', heads.includes('Lead stages'), true);
+ck('line types rendered', heads.includes('Line types'), true);
+ck('funnel has four steps', await page.locator('.funnel-row').count(), 4);
+
+const labels = await page.$$eval('#analytics-body .stat-l', e => e.map(x => x.textContent));
+ck('spend reported', labels.includes('Spend'), true);
+ck('cost per connect reported', labels.includes('Cost per connect'), true);
+ck('delivery reported', labels.includes('Texts delivered'), true);
+
+// Prices arrive from Twilio minutes after a call, so the sync is explicit.
+await page.click('#btn-analytics-costs');
+await page.waitForTimeout(1400);
+ck('cost sync reports back', /Priced|failed/.test(await page.textContent('#status-bar')), true);
+
+console.log('\n=== analytics filters ===');
+await page.selectOption('#analytics-range', '1');
+await page.waitForTimeout(600);
+ck('today range labelled', (await page.textContent('#analytics-body')).includes('Today'), true);
+
+await page.selectOption('#analytics-range', 'custom');
+await page.waitForTimeout(300);
+ck('custom dates revealed', await page.isVisible('#analytics-custom'), true);
+await page.fill('#analytics-from', '2026-01-01');
+await page.fill('#analytics-to', '2026-01-10');
+await page.waitForTimeout(700);
+ck('custom range labelled',
+   (await page.textContent('#analytics-body')).includes('2026-01-01 to 2026-01-10'), true);
+
+// The campaign filter is filled from the campaign list, so the campaign created
+// earlier in this suite has to be selectable.
+const campaignOpts = await page.$$eval('#analytics-campaign option', e => e.map(x => x.textContent));
+ck('campaign filter populated', campaignOpts.length > 1, true);
+
+await page.selectOption('#analytics-range', '14');
+await page.waitForTimeout(600);
 
 console.log('\n=== More menu navigation ===');
 await page.click('#view-analytics [data-back="more"]');

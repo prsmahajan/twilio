@@ -170,6 +170,19 @@
 
     .section-header { padding: 8px 16px 16px; flex-shrink: 0; }
 
+    /* Range filter sitting at the far end of a view header. */
+    .range-select {
+      margin-left: auto;
+      padding: 6px 10px;
+      border: none;
+      border-radius: var(--r);
+      background: var(--surface);
+      color: var(--text-2);
+      font-family: var(--sans);
+      font-size: .75rem;
+      cursor: pointer;
+    }
+
     .btn-back, .btn-icon {
       width: 32px; height: 32px;
       display: grid; place-items: center;
@@ -250,6 +263,38 @@
       flex-shrink: 0;
       font-feature-settings: "tnum" 1;
     }
+
+    /* Live local time where the callee is. */
+    .dial-clock {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      font-family: var(--mono);
+      font-size: .75rem;
+      color: var(--text-3);
+      margin: -4px 0 8px;
+      flex-shrink: 0;
+      font-feature-settings: "tnum" 1;
+    }
+
+    .dial-clock[hidden] { display: none; }
+    .dial-clock .dc-time { font-weight: 500; color: var(--text); }
+    .dial-clock.outside .dc-time { color: var(--amber); }
+    .dial-clock .dc-warn { color: var(--amber); }
+
+    /* Characters used out of the single-SMS-segment budget. */
+    .char-count {
+      font-family: var(--mono);
+      font-size: .6875rem;
+      color: var(--text-4);
+      text-align: right;
+      padding: 2px 2px 0;
+      font-feature-settings: "tnum" 1;
+    }
+
+    .char-count.near { color: var(--amber); }
+    .char-count.over { color: #d6392e; }
 
     .keypad-grid {
       display: grid;
@@ -1117,6 +1162,9 @@
 
     .stat-n { font-size: 1.5rem; font-weight: 600; letter-spacing: -0.96px; font-feature-settings: "tnum" 1; }
     .stat-l { font-size: .75rem; color: var(--text-3); text-align: center; }
+    /* Amounts run to four decimals for sub-cent spend, which does not fit at the
+       headline size. */
+    .stat-n.money { font-size: 1.125rem; letter-spacing: -0.5px; }
 
     .chart { display: flex; align-items: flex-end; gap: 4px; height: 120px; padding: 8px 0; }
     .chart-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; height: 100%; }
@@ -1124,6 +1172,9 @@
 
     .chart-bar {
       width: 42%;
+      /* A chart with one or two active buckets would otherwise draw slabs
+         hundreds of pixels wide. */
+      max-width: 48px;
       min-height: 2px;
       border-radius: 2px 2px 0 0;
       background: var(--line);
@@ -1146,6 +1197,116 @@
     }
 
     .brk-n { font-family: var(--mono); font-size: .875rem; font-weight: 500; }
+    .brk-l { font-size: .8125rem; color: var(--text-2); }
+
+    /* Filter bar under the analytics header. */
+    .an-controls {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      padding: 0 16px 12px;
+      flex-shrink: 0;
+    }
+
+    .an-controls .btn-ghost.sm { padding: 5px 12px; font-size: .75rem; }
+
+    .an-custom { display: flex; align-items: center; gap: 6px; width: 100%; }
+    /* The class sets display, so `hidden` needs its own rule to win. */
+    .an-custom[hidden] { display: none; }
+
+    .an-custom input {
+      flex: 1;
+      padding: 5px 8px;
+      border: none;
+      border-radius: var(--r);
+      background: var(--surface);
+      color: var(--text-2);
+      font-family: var(--mono);
+      font-size: .75rem;
+    }
+
+    .an-custom-sep { font-size: .75rem; color: var(--text-4); }
+
+    /* Period-over-period change, shown under a stat. */
+    .delta {
+      font-family: var(--mono);
+      font-size: .625rem;
+      font-weight: 500;
+      color: var(--text-4);
+    }
+
+    .delta.up   { color: var(--develop); }
+    .delta.down { color: #d6392e; }
+
+    /* Lead funnel: one row per step, bar width proportional to the first step. */
+    .funnel-row {
+      display: grid;
+      grid-template-columns: 92px 1fr 46px;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 0;
+    }
+
+    .funnel-l { font-size: .75rem; color: var(--text-3); }
+    .funnel-n { font-family: var(--mono); font-size: .8125rem; text-align: right; }
+
+    .funnel-track { height: 8px; border-radius: var(--pill); background: var(--surface); }
+
+    .funnel-fill {
+      height: 100%;
+      min-width: 2px;
+      border-radius: var(--pill);
+      background: var(--text);
+      transition: width .4s var(--ease);
+    }
+
+    .funnel-fill.dim { background: var(--line); }
+
+    /* Hour-by-weekday connect-rate heatmap. Scrolls sideways rather than
+       squeezing 24 columns into a phone width. */
+    .heat-wrap { overflow-x: auto; padding-bottom: 4px; }
+
+    .heat {
+      display: grid;
+      grid-template-columns: 28px repeat(24, 14px);
+      gap: 2px;
+      min-width: max-content;
+    }
+
+    .heat-lbl {
+      font-family: var(--mono);
+      font-size: .5625rem;
+      color: var(--text-4);
+      display: flex;
+      align-items: center;
+    }
+
+    .heat-lbl.hour { justify-content: center; }
+
+    .heat-cell {
+      height: 14px;
+      border-radius: 2px;
+      background: var(--surface);
+    }
+
+    /* Attempted but below the signal floor: outlined, not filled, so two lucky
+       pickups cannot look like a reliable 100%. */
+    .heat-cell.thin { box-shadow: inset 0 0 0 1px var(--line); background: transparent; }
+
+    /* Most-dialled leads. */
+    .an-lead-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 9px 0;
+      box-shadow: inset 0 -1px 0 var(--line);
+      font-size: .8125rem;
+    }
+
+    .an-lead-who { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .an-lead-meta { font-family: var(--mono); font-size: .6875rem; color: var(--text-3); white-space: nowrap; }
 
     /* ── More menu ── */
     .menu-row {
@@ -1219,8 +1380,183 @@
         transition-duration: .001ms !important;
       }
     }
+    .best-hour {
+      margin: 4px 0 12px;
+      padding: 10px 12px;
+      border-radius: var(--r);
+      background: var(--surface);
+      font-size: .8125rem;
+      color: var(--text-2);
+    }
+
+    /* ── Chips: filter toggles and inline actions ── */
+    .chip-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+
+    .chip {
+      padding: 7px 12px;
+      border: none;
+      border-radius: 999px;
+      background: var(--bg);
+      box-shadow: var(--ring-light);
+      color: var(--text-2);
+      font-family: var(--sans);
+      font-size: .8125rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background .15s, color .15s, box-shadow .15s;
+    }
+
+    .chip:hover  { background: var(--surface); }
+    .chip.active { background: var(--text); color: var(--bg); }
+    .chip:disabled { opacity: .55; cursor: default; }
+
+    /* ── Lead detail: enrichment badges and calling-window notice ── */
+    .ld-badges { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-top: 10px; }
+
+    .badge {
+      padding: 3px 9px;
+      border-radius: 999px;
+      background: var(--surface);
+      color: var(--text-2);
+      font-family: var(--mono);
+      font-size: .6875rem;
+      letter-spacing: -0.2px;
+    }
+
+    .badge.bad { background: hsl(0, 72%, 96%); color: hsl(0, 60%, 40%); }
+
+    .ld-window { margin-top: 8px; font-size: .75rem; text-align: center; color: var(--text-3); }
+    .ld-window.ok  { color: hsl(145, 55%, 32%); }
+    .ld-window.bad { color: hsl(0, 60%, 45%); }
+
+    .muted { color: var(--text-3); font-size: .75rem; }
+
+    /* ── Timeline ── */
+    .tl-row {
+      display: flex;
+      gap: 10px;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .tl-row:last-child { border-bottom: none; }
+    .tl-icon { flex: none; width: 20px; text-align: center; font-size: .875rem; line-height: 1.4; }
+    .tl-body { flex: 1; min-width: 0; }
+    .tl-text { font-size: .8125rem; color: var(--text); word-break: break-word; }
+    .tl-meta { font-size: .6875rem; color: var(--text-3); margin-top: 3px; }
+
+    .tl-tag {
+      display: inline-block;
+      margin-right: 6px;
+      padding: 1px 7px;
+      border-radius: 999px;
+      background: var(--surface);
+      color: var(--text-3);
+      font-family: var(--mono);
+      font-size: .625rem;
+    }
+
+    .tl-body audio { width: 100%; height: 32px; margin-top: 6px; }
+
+    /* ── Follow-up tasks ── */
+    .task-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 4px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .task-row.overdue .task-title { color: hsl(0, 60%, 45%); }
+    .task-main  { flex: 1; min-width: 0; }
+    .task-title { font-size: .875rem; font-weight: 500; }
+    .task-meta  { font-size: .6875rem; color: var(--text-3); margin-top: 2px; }
+
+    .task-check { width: 18px; height: 18px; accent-color: var(--text); cursor: pointer; }
+
+    .task-call, .task-del {
+      border: none;
+      background: none;
+      cursor: pointer;
+      font-size: .9375rem;
+      color: var(--text-3);
+      padding: 4px;
+    }
+
+    .task-del:hover { color: hsl(0, 60%, 45%); }
+
+    /* ── Recordings ── */
+    .rec-row {
+      padding: 12px 0;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .rec-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+    .rec-who  { font-size: .875rem; font-weight: 500; }
+    .rec-meta { font-family: var(--mono); font-size: .6875rem; color: var(--text-3); }
+    .rec-row audio { width: 100%; height: 34px; margin-top: 8px; }
+
+    .rec-del {
+      margin-top: 4px;
+      border: none;
+      background: none;
+      color: var(--text-3);
+      font-family: var(--sans);
+      font-size: .75rem;
+      cursor: pointer;
+      padding: 2px 0;
+    }
+
+    .rec-del:hover { color: hsl(0, 60%, 45%); }
+
+    .rec-err {
+      font-size: .75rem;
+      color: hsl(0, 60%, 45%);
+      margin-top: 4px;
+    }
+
+    /* ── SMS templates ── */
+    .tpl-row {
+      position: relative;
+      padding: 10px 28px 10px 0;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .tpl-name { font-size: .8125rem; font-weight: 600; }
+    .tpl-body { font-size: .75rem; color: var(--text-2); margin-top: 3px; white-space: pre-wrap; }
+
+    .tpl-del {
+      position: absolute;
+      top: 8px;
+      right: 0;
+      border: none;
+      background: none;
+      color: var(--text-3);
+      cursor: pointer;
+      font-size: .875rem;
+    }
+
+    .tpl-picker-row { padding: 0 12px 6px; }
+
+    .tpl-picker-row select {
+      width: 100%;
+      padding: 7px 10px;
+      border: none;
+      border-radius: var(--r);
+      background: var(--surface);
+      color: var(--text-2);
+      font-family: var(--sans);
+      font-size: .75rem;
+    }
+
+    #tpl-merge-hint {
+      margin-top: 6px;
+      font-family: var(--mono);
+      font-size: .6875rem;
+      color: var(--text-3);
+    }
   </style>
-  <script type="module" crossorigin src="/assets/index-Bw_NfCsa.js"></script>
+  <script type="module" crossorigin src="/assets/index-DUxgaAYi.js"></script>
   <link rel="stylesheet" crossorigin href="/assets/index-BlOx-ify.css">
 </head>
 
@@ -1235,6 +1571,7 @@
       <div class="call-timer" id="call-timer">00:00</div>
       <div class="call-ctrl-row">
         <button class="call-ctrl" id="btn-mute"><span class="ci">🎤</span>Mute</button>
+        <button class="call-ctrl" id="btn-vm-drop"><span class="ci">📼</span>Voicemail</button>
         <button class="call-ctrl" id="btn-hangup-bar"><span class="ci">📵</span>End</button>
       </div>
       <!-- While a call is active the main keypad sends DTMF; this echoes what was sent. -->
@@ -1297,6 +1634,29 @@
       </div>
     </div>
 
+    <!-- Follow-up sheet -->
+    <div class="disp-overlay" id="task-overlay">
+      <div class="disp-sheet">
+        <div class="disp-title">Schedule a follow-up</div>
+        <div class="disp-for" id="task-for"></div>
+        <div class="field">
+          <label for="task-title">What</label>
+          <input id="task-title" type="text" placeholder="Call back about pricing" />
+        </div>
+        <div class="field">
+          <label for="task-due">When</label>
+          <input id="task-due" type="text" placeholder="+2h" autocomplete="off" />
+        </div>
+        <div class="import-help" style="margin-bottom:12px">
+          Relative shorthand: +30m, +2h, +3d, +1w — or a full date like 2026-01-31T15:00.
+        </div>
+        <div class="auto-btn-row">
+          <button class="btn-ghost" id="btn-task-cancel">Cancel</button>
+          <button class="btn-primary" id="btn-task-save">Schedule</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Views -->
     <div class="views">
 
@@ -1307,6 +1667,7 @@
           <button id="btn-backspace" title="Backspace (hold to clear)">⌫</button>
         </div>
         <div class="dial-hint" id="dial-hint"></div>
+        <div class="dial-clock" id="dial-clock" hidden></div>
         <div class="keypad-grid">
           <button class="key" data-digit="1">1<span class="sub"></span></button>
           <button class="key" data-digit="2">2<span class="sub">ABC</span></button>
@@ -1384,6 +1745,9 @@
           <button class="btn-call-contact" id="btn-call-contact" title="Call">📞</button>
         </div>
         <div id="conv-messages"></div>
+        <div class="tpl-picker-row">
+          <select id="sms-template"><option value="">Template…</option></select>
+        </div>
         <div class="compose-row">
           <textarea id="sms-body" rows="1" placeholder="Message…"></textarea>
           <button id="btn-send-sms">➤</button>
@@ -1481,6 +1845,8 @@
           <div class="ld-actions">
             <button class="ld-call" id="btn-ld-call" title="Call">📞</button>
           </div>
+          <div class="ld-badges" id="ld-badges"></div>
+          <div class="ld-window" id="ld-window"></div>
         </div>
         <div class="view-body">
           <div class="field-row">
@@ -1513,6 +1879,15 @@
             <span>Do not call</span>
             <input type="checkbox" id="ld-dnc" />
           </div>
+
+          <div class="chip-row">
+            <button class="chip" id="btn-ld-enrich">Look up carrier</button>
+            <button class="chip" id="btn-ld-task">Schedule follow-up</button>
+            <button class="chip" id="btn-ld-note">Add note</button>
+          </div>
+
+          <div class="sub-head">Timeline</div>
+          <div id="ld-timeline"></div>
 
           <div class="sub-head">Call history</div>
           <div id="ld-history"></div>
@@ -1660,20 +2035,95 @@
         <div class="view-header">
           <button class="btn-back" data-back="more">‹</button>
           <h2>Analytics</h2>
+          <select id="analytics-range" class="range-select" aria-label="Date range">
+            <option value="1">Today</option>
+            <option value="7">7 days</option>
+            <option value="14" selected>14 days</option>
+            <option value="30">30 days</option>
+            <option value="90">90 days</option>
+            <option value="custom">Custom…</option>
+          </select>
+        </div>
+        <div class="an-controls">
+          <select id="analytics-campaign" class="range-select" aria-label="Campaign">
+            <option value="">All campaigns</option>
+          </select>
+          <button id="btn-analytics-export" class="btn-ghost sm">Export CSV</button>
+          <button id="btn-analytics-costs" class="btn-ghost sm">Sync costs</button>
+          <div class="an-custom" id="analytics-custom" hidden>
+            <input type="date" id="analytics-from" aria-label="From date">
+            <span class="an-custom-sep">to</span>
+            <input type="date" id="analytics-to" aria-label="To date">
+          </div>
         </div>
         <div class="view-body" id="analytics-body"></div>
+      </div>
+
+      <!-- ── FOLLOW-UPS ── -->
+      <div id="view-tasks" class="view">
+        <div class="msg-header">
+          <h2>Follow-ups</h2>
+          <button class="btn-icon" id="btn-task-new" title="New follow-up">＋</button>
+        </div>
+        <div class="chip-row" style="padding:0 14px">
+          <button class="chip active" data-task-scope="open">Open</button>
+          <button class="chip" data-task-scope="overdue">Overdue</button>
+          <button class="chip" data-task-scope="today">Due today</button>
+          <button class="chip" data-task-scope="done">Done</button>
+        </div>
+        <div class="count-line" id="tasks-count"></div>
+        <div id="tasks-list" style="flex:1;overflow-y:auto;padding:0 12px 14px"></div>
+      </div>
+
+      <!-- ── RECORDINGS ── -->
+      <div id="view-recordings" class="view">
+        <div class="view-header">
+          <button class="btn-back" data-back="more">‹</button><h2>Recordings</h2>
+        </div>
+        <div id="recordings-list" style="flex:1;overflow-y:auto;padding:8px 12px 14px"></div>
+      </div>
+
+      <!-- ── TEMPLATES ── -->
+      <div id="view-templates" class="view">
+        <div class="view-header">
+          <button class="btn-back" data-back="more">‹</button><h2>SMS templates</h2>
+        </div>
+        <div class="view-body">
+          <div class="field"><label for="tpl-name">Name</label><input id="tpl-name" type="text" placeholder="Intro" /></div>
+          <div class="field">
+            <label for="tpl-body">Body</label>
+            <textarea id="tpl-body" rows="3" placeholder="Hi {{first_name}}, …"></textarea>
+            <div class="hint" id="tpl-merge-hint"></div>
+          </div>
+          <div class="auto-btn-row single">
+            <button class="btn-primary" id="btn-tpl-save">Save template</button>
+          </div>
+          <div class="sub-head">Saved</div>
+          <div id="tpl-list"></div>
+        </div>
       </div>
 
       <!-- ── MORE ── -->
       <div id="view-more" class="view">
         <div class="section-header">More</div>
         <div class="view-body">
+          <div class="menu-row" data-goto="tasks"><span class="mi">⏰</span>Follow-ups<span class="chev">›</span></div>
           <div class="menu-row" data-goto="recent"><span class="mi">🕐</span>Recent calls<span class="chev">›</span></div>
+          <div class="menu-row" id="recordings-row" data-goto="recordings"><span class="mi">🎙️</span>Recordings<span class="chev">›</span></div>
+          <div class="menu-row" data-goto="templates"><span class="mi">💬</span>SMS templates<span class="chev">›</span></div>
           <div class="menu-row" data-goto="analytics"><span class="mi">📊</span>Analytics<span class="chev">›</span></div>
           <div class="menu-row" data-goto="autodialer"><span class="mi">⟳</span>Quick auto dial<span class="chev">›</span></div>
           <div class="menu-row" data-goto="settings"><span class="mi">⚙️</span>Settings<span class="chev">›</span></div>
+
+          <div class="sub-head">Data</div>
+          <div class="chip-row">
+            <button class="chip" id="btn-export-leads">Export leads CSV</button>
+            <button class="chip" id="btn-export-calls">Export calls CSV</button>
+            <button class="chip" id="btn-enrich-all">Look up carriers</button>
+          </div>
         </div>
       </div>
+
 
     </div><!-- /views -->
 
